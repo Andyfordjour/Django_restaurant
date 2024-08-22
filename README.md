@@ -1,4 +1,4 @@
-#Restaurant Reservation System
+Restaurant Reservation System
 
 Overview
 The Restaurant Reservation System is a Django-based web application designed for managing customer reservations and displaying menu items. The application allows users to book reservations, view detailed menu information, and navigate through various pages seamlessly.
@@ -21,29 +21,28 @@ Installation
 Clone the Repository:
 
 bash
-Copy code
 git clone https://github.com/yourusername/restaurant-reservation-system.git
 cd restaurant-reservation-system
 Create and Activate a Virtual Environment:
 
 bash
-Copy code
+
 python -m venv venv
 source venv/bin/activate  # On Windows, use `venv\Scripts\activate`
 Install the Required Packages:
 
 bash
-Copy code
+
 pip install -r requirements.txt
 Apply Migrations:
 
 bash
-Copy code
+
 python manage.py migrate
 Run the Development Server:
 
 bash
-Copy code
+
 python manage.py runserver
 Access the Application:
 
@@ -58,5 +57,4 @@ Requirements File
 Create a requirements.txt file with the following content:
 
 makefile
-Copy code
 Django==4.2.3
