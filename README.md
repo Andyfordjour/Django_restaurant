@@ -1,4 +1,5 @@
-Restaurant Reservation System
+#Restaurant Reservation System
+
 Overview
 The Restaurant Reservation System is a Django-based web application designed for managing customer reservations and displaying menu items. The application allows users to book reservations, view detailed menu information, and navigate through various pages seamlessly.
 
