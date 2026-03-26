@@ -1,0 +1,1342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Student Management App — Full Stack Guide</title>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --surface: #13161e;
+      --surface2: #1a1e2a;
+      --border: #252a38;
+      --accent-spring: #6ee7b7;
+      --accent-angular: #f472b6;
+      --accent-api: #60a5fa;
+      --accent-yellow: #fbbf24;
+      --text: #e2e8f0;
+      --text-muted: #64748b;
+      --text-dim: #94a3b8;
+      --code-bg: #0a0c10;
+      --radius: 12px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      font-weight: 300;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* Background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(96,165,250,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(96,165,250,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrapper {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 60px 24px 100px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      text-align: center;
+      padding: 60px 0 70px;
+      position: relative;
+    }
+
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 6px 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-dim);
+      letter-spacing: 0.08em;
+      margin-bottom: 28px;
+    }
+
+    .hero-badge span { color: var(--accent-spring); }
+
+    .hero h1 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 800;
+      font-size: clamp(2.2rem, 5vw, 3.6rem);
+      line-height: 1.1;
+      letter-spacing: -0.03em;
+      margin-bottom: 18px;
+    }
+
+    .hero h1 em {
+      font-style: normal;
+      background: linear-gradient(135deg, var(--accent-spring), var(--accent-api));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero p {
+      color: var(--text-dim);
+      font-size: 1.05rem;
+      max-width: 520px;
+      margin: 0 auto 36px;
+    }
+
+    .tech-pills {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 7px 16px;
+      border-radius: 999px;
+      font-size: 13px;
+      font-weight: 500;
+      border: 1px solid;
+    }
+
+    .pill.spring { background: rgba(110,231,183,0.08); border-color: rgba(110,231,183,0.25); color: var(--accent-spring); }
+    .pill.angular { background: rgba(244,114,182,0.08); border-color: rgba(244,114,182,0.25); color: var(--accent-angular); }
+    .pill.h2 { background: rgba(96,165,250,0.08); border-color: rgba(96,165,250,0.25); color: var(--accent-api); }
+    .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 48px 0;
+    }
+
+    /* ── SECTION HEADER ── */
+    .section-label {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .section-label .num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 8px;
+      letter-spacing: 0.06em;
+    }
+
+    .section-label h2 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1.4rem;
+      letter-spacing: -0.02em;
+    }
+
+    .section-label h2 span { color: var(--accent-spring); }
+    .section-label h2 span.ang { color: var(--accent-angular); }
+
+    /* ── FLOW DIAGRAM ── */
+    .flow {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px;
+      margin-bottom: 40px;
+    }
+
+    .flow-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 24px;
+    }
+
+    .flow-row {
+      display: flex;
+      align-items: center;
+      gap: 0;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .flow-node {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+      min-width: 120px;
+    }
+
+    .flow-box {
+      padding: 10px 20px;
+      border-radius: 8px;
+      font-weight: 500;
+      font-size: 13px;
+      border: 1px solid;
+      white-space: nowrap;
+    }
+
+    .flow-box.angular-box { background: rgba(244,114,182,0.1); border-color: rgba(244,114,182,0.3); color: var(--accent-angular); }
+    .flow-box.api-box    { background: rgba(96,165,250,0.1);  border-color: rgba(96,165,250,0.3);  color: var(--accent-api); }
+    .flow-box.spring-box { background: rgba(110,231,183,0.1); border-color: rgba(110,231,183,0.3); color: var(--accent-spring); }
+
+    .flow-label { font-size: 11px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+
+    .flow-arrow {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 0 8px;
+    }
+
+    .flow-arrow .line {
+      width: 100%;
+      height: 1px;
+      background: var(--border);
+      position: relative;
+    }
+
+    .flow-arrow .line::after {
+      content: '▶';
+      position: absolute;
+      right: -2px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 8px;
+      color: var(--text-muted);
+    }
+
+    .flow-arrow .line.back::after { content: '◀'; right: auto; left: -2px; }
+    .flow-arrow .method { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--accent-api); }
+
+    /* ── STRUCTURE TREE ── */
+    .tree-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    @media (max-width: 600px) { .tree-grid { grid-template-columns: 1fr; } }
+
+    .tree-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .tree-card-header {
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .tree-card-header.spring-h { background: rgba(110,231,183,0.06); color: var(--accent-spring); }
+    .tree-card-header.angular-h { background: rgba(244,114,182,0.06); color: var(--accent-angular); }
+
+    .tree-card-body {
+      padding: 16px 20px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      line-height: 2;
+    }
+
+    .tree-file { color: var(--text-dim); display: flex; gap: 8px; }
+    .tree-file .fname { color: var(--text); }
+    .tree-file .fdesc { color: var(--text-muted); font-size: 11px; }
+
+    /* ── STEP CARD ── */
+    .step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 24px;
+      overflow: hidden;
+      transition: border-color 0.2s;
+    }
+
+    .step:hover { border-color: #2e3548; }
+
+    .step-header {
+      padding: 18px 24px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .step-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 3px 9px;
+      white-space: nowrap;
+      margin-top: 3px;
+    }
+
+    .step-info h3 {
+      font-family: 'Syne', sans-serif;
+      font-weight: 700;
+      font-size: 1rem;
+      margin-bottom: 4px;
+    }
+
+    .step-info .path {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .step-info .path span { color: var(--accent-yellow); }
+
+    .step-body { padding: 0; }
+
+    .note-box {
+      margin: 16px 24px;
+      padding: 12px 16px;
+      background: rgba(96,165,250,0.06);
+      border-left: 3px solid var(--accent-api);
+      border-radius: 0 6px 6px 0;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    .note-box strong { color: var(--accent-api); }
+
+    /* ── CODE BLOCK ── */
+    .code-wrap {
+      position: relative;
+    }
+
+    .code-lang {
+      position: absolute;
+      top: 12px;
+      right: 16px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 10px;
+      color: var(--text-muted);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      z-index: 1;
+    }
+
+    pre {
+      background: var(--code-bg);
+      padding: 24px;
+      overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12.5px;
+      line-height: 1.75;
+      border-top: 1px solid var(--border);
+    }
+
+    pre code { color: var(--text); }
+
+    /* Syntax highlighting */
+    .kw  { color: #c084fc; }   /* keywords */
+    .cl  { color: var(--accent-spring); }  /* class names */
+    .an  { color: #fb923c; }   /* annotations */
+    .st  { color: #86efac; }   /* strings */
+    .cm  { color: #4b5563; }   /* comments */
+    .fn  { color: var(--accent-api); }     /* functions */
+    .ty  { color: #fcd34d; }   /* types */
+    .num { color: #f87171; }   /* numbers/values */
+    .prop{ color: #67e8f9; }   /* properties */
+
+    /* ── TERMINAL BLOCK ── */
+    .terminal {
+      background: #080a0e;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 24px;
+    }
+
+    .terminal-bar {
+      background: var(--surface2);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .terminal-bar .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+
+    .terminal-bar .dot.r { background: #ef4444; }
+    .terminal-bar .dot.y { background: #f59e0b; }
+    .terminal-bar .dot.g { background: #22c55e; }
+    .terminal-bar .label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 6px;
+    }
+
+    .terminal pre {
+      border-top: none;
+      background: transparent;
+      padding: 20px 24px;
+    }
+
+    .terminal .prompt { color: var(--accent-spring); }
+    .terminal .cmd { color: var(--text); }
+    .terminal .out { color: var(--text-muted); }
+    .terminal .success { color: var(--accent-spring); }
+
+    /* ── API ENDPOINTS ── */
+    .endpoints {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-bottom: 40px;
+    }
+
+    .endpoint {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .method {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 12px;
+      border-radius: 6px;
+      min-width: 56px;
+      text-align: center;
+    }
+
+    .method.get  { background: rgba(110,231,183,0.12); color: var(--accent-spring); }
+    .method.post { background: rgba(96,165,250,0.12); color: var(--accent-api); }
+
+    .endpoint-url {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+      color: var(--text);
+    }
+
+    .endpoint-desc {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-left: auto;
+    }
+
+    /* ── WHAT HAPPENS ── */
+    .flow-steps {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+
+    .flow-steps h3 {
+      font-family: 'Syne', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      margin-bottom: 20px;
+      color: var(--text-dim);
+    }
+
+    .flow-step-item {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 14px;
+      align-items: flex-start;
+    }
+
+    .flow-step-item:last-child { margin-bottom: 0; }
+
+    .step-circle {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      font-weight: 600;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    .step-circle.green { background: rgba(110,231,183,0.15); color: var(--accent-spring); border: 1px solid rgba(110,231,183,0.3); }
+    .step-circle.blue  { background: rgba(96,165,250,0.15);  color: var(--accent-api);    border: 1px solid rgba(96,165,250,0.3); }
+    .step-circle.pink  { background: rgba(244,114,182,0.15); color: var(--accent-angular); border: 1px solid rgba(244,114,182,0.3); }
+
+    .step-text { font-size: 14px; color: var(--text-dim); padding-top: 3px; }
+    .step-text strong { color: var(--text); font-weight: 500; }
+
+    /* ── NEXT STEPS ── */
+    .next-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 28px;
+    }
+
+    .next-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .next-card:hover { border-color: #3a4055; transform: translateY(-2px); }
+
+    .next-card .icon { font-size: 20px; margin-bottom: 10px; }
+    .next-card h4 { font-family: 'Syne', sans-serif; font-size: 0.9rem; font-weight: 700; margin-bottom: 6px; }
+    .next-card p  { font-size: 12px; color: var(--text-muted); }
+
+    /* ── IMPORTANT NOTES ── */
+    .notes-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 40px;
+    }
+
+    @media (max-width: 600px) { .notes-grid { grid-template-columns: 1fr; } }
+
+    .note-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 20px;
+    }
+
+    .note-card .note-title {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      color: var(--accent-yellow);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .note-card p { font-size: 13px; color: var(--text-dim); }
+    .note-card code {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      background: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: var(--accent-api);
+    }
+
+    /* ── RUN SECTION ── */
+    .run-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-bottom: 40px;
+    }
+
+    @media (max-width: 600px) { .run-grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- HERO -->
+  <div class="hero">
+    <div class="hero-badge"><span>●</span> Full Stack Guide</div>
+    <h1>Student Management<br/><em>Angular + Spring Boot</em></h1>
+    <p>A complete beginner-friendly full stack app — REST API, frontend UI, and in-memory database.</p>
+    <div class="tech-pills">
+      <div class="pill spring"><div class="pill-dot"></div>Spring Boot · Port 8080</div>
+      <div class="pill angular"><div class="pill-dot"></div>Angular · Port 4200</div>
+      <div class="pill h2"><div class="pill-dot"></div>H2 In-Memory DB</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- HOW THEY WORK TOGETHER -->
+  <div class="section-label">
+    <span class="num">00</span>
+    <h2>How They <span>Work Together</span></h2>
+  </div>
+
+  <div class="flow">
+    <div class="flow-title">// communication flow</div>
+    <div class="flow-row">
+      <div class="flow-node">
+        <div class="flow-box angular-box">Angular</div>
+        <div class="flow-label">Frontend · Browser</div>
+      </div>
+      <div class="flow-arrow">
+        <div class="flow-label" style="margin-bottom:2px">GET /api/students</div>
+        <div class="line"></div>
+      </div>
+      <div class="flow-node">
+        <div class="flow-box api-box">REST API</div>
+        <div class="flow-label">JSON Bridge</div>
+      </div>
+      <div class="flow-arrow">
+        <div class="flow-label" style="margin-bottom:2px">Fetch from DB</div>
+        <div class="line"></div>
+      </div>
+      <div class="flow-node">
+        <div class="flow-box spring-box">Spring Boot</div>
+        <div class="flow-label">Backend · Logic</div>
+      </div>
+    </div>
+    <div class="flow-row" style="margin-top:10px">
+      <div class="flow-node">
+        <div class="flow-box angular-box">Displays List</div>
+      </div>
+      <div class="flow-arrow">
+        <div class="line back"></div>
+        <div class="flow-label" style="margin-top:2px">JSON response</div>
+      </div>
+      <div class="flow-node"></div>
+      <div class="flow-arrow">
+        <div class="line back"></div>
+        <div class="flow-label" style="margin-top:2px">Returns data</div>
+      </div>
+      <div class="flow-node">
+        <div class="flow-box spring-box">H2 Database</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API ENDPOINTS -->
+  <div class="section-label">
+    <span class="num">01</span>
+    <h2>API <span>Endpoints</span></h2>
+  </div>
+  <div class="endpoints">
+    <div class="endpoint">
+      <div class="method get">GET</div>
+      <div class="endpoint-url">/api/students</div>
+      <div class="endpoint-desc">Returns all students as JSON array</div>
+    </div>
+    <div class="endpoint">
+      <div class="method post">POST</div>
+      <div class="endpoint-url">/api/students</div>
+      <div class="endpoint-desc">Accepts student object and saves it</div>
+    </div>
+  </div>
+
+  <!-- PROJECT STRUCTURE -->
+  <div class="section-label">
+    <span class="num">02</span>
+    <h2>Project <span>Structure</span></h2>
+  </div>
+  <div class="tree-grid">
+    <div class="tree-card">
+      <div class="tree-card-header spring-h">⬡ Spring Boot — Backend</div>
+      <div class="tree-card-body">
+        <div class="tree-file"><span>├─</span><span><span class="fname">Student.java</span></span></div>
+        <div class="tree-file" style="padding-left:20px"><span class="fdesc">← data model</span></div>
+        <div class="tree-file"><span>├─</span><span><span class="fname">StudentRepository.java</span></span></div>
+        <div class="tree-file" style="padding-left:20px"><span class="fdesc">← talks to DB</span></div>
+        <div class="tree-file"><span>└─</span><span><span class="fname">StudentController.java</span></span></div>
+        <div class="tree-file" style="padding-left:20px"><span class="fdesc">← REST API handler</span></div>
+      </div>
+    </div>
+    <div class="tree-card">
+      <div class="tree-card-header angular-h">◈ Angular — Frontend</div>
+      <div class="tree-card-body">
+        <div class="tree-file"><span>├─</span><span><span class="fname">models/student.ts</span></span></div>
+        <div class="tree-file" style="padding-left:20px"><span class="fdesc">← data shape</span></div>
+        <div class="tree-file"><span>├─</span><span><span class="fname">services/student.service.ts</span></span></div>
+        <div class="tree-file" style="padding-left:20px"><span class="fdesc">← calls the API</span></div>
+        <div class="tree-file"><span>├─</span><span><span class="fname">app.component.ts</span></span></div>
+        <div class="tree-file" style="padding-left:20px"><span class="fdesc">← logic</span></div>
+        <div class="tree-file"><span>└─</span><span><span class="fname">app.component.html</span></span></div>
+        <div class="tree-file" style="padding-left:20px"><span class="fdesc">← UI template</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- PART 1 — SPRING BOOT -->
+  <div class="section-label">
+    <span class="num">03</span>
+    <h2><span>Spring Boot</span> — Backend</h2>
+  </div>
+
+  <!-- Step 1 -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 01</div>
+      <div class="step-info">
+        <h3>Create the Project</h3>
+        <div class="path">Go to <span>https://start.spring.io</span> and configure:</div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="note-box">
+        <strong>Settings:</strong> Project: Maven · Language: Java · Spring Boot: 3.x.x · Group: com.example · Artifact: students · Packaging: Jar · Java: 17 or 21<br/>
+        <strong>Dependencies:</strong> Spring Web · Spring Data JPA · H2 Database
+      </div>
+      <div class="code-wrap">
+        <div class="code-lang">bash</div>
+        <pre><code><span class="cm"># After downloading and extracting, move to WSL</span>
+<span class="fn">mv</span> /mnt/c/Users/YourName/Downloads/students ~/students
+<span class="fn">cd</span> ~/students</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 02</div>
+      <div class="step-info">
+        <h3>Student.java — Data Model</h3>
+        <div class="path">src/main/java/com/example/students/<span>Student.java</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-wrap">
+        <div class="code-lang">java</div>
+        <pre><code><span class="kw">package</span> com.example.students;
+
+<span class="kw">import</span> jakarta.persistence.Entity;
+<span class="kw">import</span> jakarta.persistence.GeneratedValue;
+<span class="kw">import</span> jakarta.persistence.GenerationType;
+<span class="kw">import</span> jakarta.persistence.Id;
+
+<span class="an">@Entity</span>
+<span class="kw">public class</span> <span class="cl">Student</span> {
+
+    <span class="an">@Id</span>
+    <span class="an">@GeneratedValue</span>(strategy = GenerationType.IDENTITY)
+    <span class="kw">private</span> <span class="ty">Long</span> id;
+    <span class="kw">private</span> <span class="ty">String</span> name;
+    <span class="kw">private</span> <span class="ty">String</span> email;
+
+    <span class="kw">public</span> <span class="fn">Student</span>() {}
+
+    <span class="kw">public</span> <span class="fn">Student</span>(<span class="ty">String</span> name, <span class="ty">String</span> email) {
+        <span class="kw">this</span>.name = name;
+        <span class="kw">this</span>.email = email;
+    }
+
+    <span class="cm">// Getters and Setters</span>
+    <span class="kw">public</span> <span class="ty">Long</span>   <span class="fn">getId</span>()    { <span class="kw">return</span> id; }
+    <span class="kw">public</span> <span class="ty">String</span> <span class="fn">getName</span>()  { <span class="kw">return</span> name; }
+    <span class="kw">public</span> <span class="ty">String</span> <span class="fn">getEmail</span>() { <span class="kw">return</span> email; }
+    <span class="kw">public void</span>   <span class="fn">setId</span>(<span class="ty">Long</span> id)        { <span class="kw">this</span>.id = id; }
+    <span class="kw">public void</span>   <span class="fn">setName</span>(<span class="ty">String</span> name)   { <span class="kw">this</span>.name = name; }
+    <span class="kw">public void</span>   <span class="fn">setEmail</span>(<span class="ty">String</span> email) { <span class="kw">this</span>.email = email; }
+}</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3 -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 03</div>
+      <div class="step-info">
+        <h3>StudentRepository.java — Database Access</h3>
+        <div class="path">src/main/java/com/example/students/<span>StudentRepository.java</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="note-box"><strong>Note:</strong> JpaRepository gives you all database operations (save, findAll, delete etc.) for free — no extra code needed.</div>
+      <div class="code-wrap">
+        <div class="code-lang">java</div>
+        <pre><code><span class="kw">package</span> com.example.students;
+
+<span class="kw">import</span> org.springframework.data.jpa.repository.JpaRepository;
+
+<span class="kw">public interface</span> <span class="cl">StudentRepository</span> <span class="kw">extends</span> <span class="cl">JpaRepository</span>&lt;<span class="cl">Student</span>, <span class="ty">Long</span>&gt; {
+}</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4 -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 04</div>
+      <div class="step-info">
+        <h3>StudentController.java — REST API</h3>
+        <div class="path">src/main/java/com/example/students/<span>StudentController.java</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="note-box"><strong>@CrossOrigin</strong> allows Angular on port 4200 to call Spring Boot on port 8080. Without it the browser blocks the request.</div>
+      <div class="code-wrap">
+        <div class="code-lang">java</div>
+        <pre><code><span class="kw">package</span> com.example.students;
+
+<span class="kw">import</span> org.springframework.web.bind.annotation.*;
+<span class="kw">import</span> java.util.List;
+
+<span class="an">@RestController</span>
+<span class="an">@RequestMapping</span>(<span class="st">"/api/students"</span>)
+<span class="an">@CrossOrigin</span>(origins = <span class="st">"http://localhost:4200"</span>)
+<span class="kw">public class</span> <span class="cl">StudentController</span> {
+
+    <span class="kw">private final</span> <span class="cl">StudentRepository</span> repository;
+
+    <span class="kw">public</span> <span class="fn">StudentController</span>(<span class="cl">StudentRepository</span> repository) {
+        <span class="kw">this</span>.repository = repository;
+    }
+
+    <span class="an">@GetMapping</span>
+    <span class="kw">public</span> <span class="ty">List</span>&lt;<span class="cl">Student</span>&gt; <span class="fn">getAllStudents</span>() {
+        <span class="kw">return</span> repository.<span class="fn">findAll</span>();
+    }
+
+    <span class="an">@PostMapping</span>
+    <span class="kw">public</span> <span class="cl">Student</span> <span class="fn">addStudent</span>(<span class="an">@RequestBody</span> <span class="cl">Student</span> student) {
+        <span class="kw">return</span> repository.<span class="fn">save</span>(student);
+    }
+}</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5 -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 05</div>
+      <div class="step-info">
+        <h3>application.properties — H2 Config</h3>
+        <div class="path">src/main/resources/<span>application.properties</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-wrap">
+        <div class="code-lang">properties</div>
+        <pre><code><span class="prop">spring.datasource.url</span>=<span class="st">jdbc:h2:mem:studentsdb</span>
+<span class="prop">spring.datasource.driver-class-name</span>=<span class="st">org.h2.Driver</span>
+<span class="prop">spring.datasource.username</span>=<span class="st">sa</span>
+<span class="prop">spring.datasource.password</span>=
+<span class="prop">spring.jpa.database-platform</span>=<span class="st">org.hibernate.dialect.H2Dialect</span>
+<span class="prop">spring.h2.console.enabled</span>=<span class="st">true</span></code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 6 — Run Backend -->
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+      <div class="label">WSL Terminal — Run Spring Boot</div>
+    </div>
+    <pre><code><span class="prompt">~$</span> <span class="cmd">cd ~/students</span>
+<span class="prompt">~$</span> <span class="cmd">./mvnw spring-boot:run</span>
+
+<span class="out">  .   ____          _            __ _ _</span>
+<span class="out"> /\\ / ___'_ __ _ _(_)_ __  __ _ \ \ \ \</span>
+
+<span class="success">  Tomcat started on port 8080</span>
+<span class="success">  Started StudentsApplication in 2.4 seconds</span>
+
+<span class="out">Test in browser → </span><span class="cmd">http://localhost:8080/api/students</span>
+<span class="out">Expected result → </span><span class="success">[]</span></code></pre>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- PART 2 — ANGULAR -->
+  <div class="section-label">
+    <span class="num">04</span>
+    <h2><span class="ang">Angular</span> — Frontend</h2>
+  </div>
+
+  <!-- Step 1 Angular -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 01</div>
+      <div class="step-info">
+        <h3>Create the Angular Project</h3>
+        <div class="path">Open a <span>new WSL terminal</span> — keep Spring Boot running</div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-wrap">
+        <div class="code-lang">bash</div>
+        <pre><code><span class="fn">cd</span> ~
+<span class="fn">ng new</span> student-app
+
+<span class="cm"># When prompted:</span>
+<span class="cm">#  Which stylesheet format? → CSS</span>
+<span class="cm">#  Enable Server-Side Rendering? → N</span>
+
+<span class="fn">cd</span> student-app</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2 Angular -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 02</div>
+      <div class="step-info">
+        <h3>student.ts — Data Interface</h3>
+        <div class="path">src/app/models/<span>student.ts</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="note-box"><strong>id?</strong> — the question mark means id is optional. Spring Boot generates it automatically.</div>
+      <div class="code-wrap">
+        <div class="code-lang">typescript</div>
+        <pre><code><span class="kw">export interface</span> <span class="cl">Student</span> {
+  id<span class="kw">?</span>: <span class="ty">number</span>;
+  name: <span class="ty">string</span>;
+  email: <span class="ty">string</span>;
+}</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3 Angular -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 03</div>
+      <div class="step-info">
+        <h3>student.service.ts — API Communication</h3>
+        <div class="path">src/app/services/<span>student.service.ts</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-wrap">
+        <div class="code-lang">typescript</div>
+        <pre><code><span class="kw">import</span> { Injectable } <span class="kw">from</span> <span class="st">'@angular/core'</span>;
+<span class="kw">import</span> { HttpClient } <span class="kw">from</span> <span class="st">'@angular/common/http'</span>;
+<span class="kw">import</span> { Observable } <span class="kw">from</span> <span class="st">'rxjs'</span>;
+<span class="kw">import</span> { Student } <span class="kw">from</span> <span class="st">'../models/student'</span>;
+
+<span class="an">@Injectable</span>({ providedIn: <span class="st">'root'</span> })
+<span class="kw">export class</span> <span class="cl">StudentService</span> {
+
+  <span class="kw">private</span> apiUrl = <span class="st">'http://localhost:8080/api/students'</span>;
+
+  <span class="kw">constructor</span>(<span class="kw">private</span> http: <span class="cl">HttpClient</span>) {}
+
+  <span class="fn">getAllStudents</span>(): <span class="cl">Observable</span>&lt;<span class="cl">Student</span>[]&gt; {
+    <span class="kw">return this</span>.http.<span class="fn">get</span>&lt;<span class="cl">Student</span>[]&gt;(<span class="kw">this</span>.apiUrl);
+  }
+
+  <span class="fn">addStudent</span>(student: <span class="cl">Student</span>): <span class="cl">Observable</span>&lt;<span class="cl">Student</span>&gt; {
+    <span class="kw">return this</span>.http.<span class="fn">post</span>&lt;<span class="cl">Student</span>&gt;(<span class="kw">this</span>.apiUrl, student);
+  }
+}</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4 Angular -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 04</div>
+      <div class="step-info">
+        <h3>app.config.ts — Enable HttpClient</h3>
+        <div class="path">src/app/<span>app.config.ts</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-wrap">
+        <div class="code-lang">typescript</div>
+        <pre><code><span class="kw">import</span> { ApplicationConfig } <span class="kw">from</span> <span class="st">'@angular/core'</span>;
+<span class="kw">import</span> { provideRouter } <span class="kw">from</span> <span class="st">'@angular/router'</span>;
+<span class="kw">import</span> { provideHttpClient } <span class="kw">from</span> <span class="st">'@angular/common/http'</span>;
+<span class="kw">import</span> { routes } <span class="kw">from</span> <span class="st">'./app.routes'</span>;
+
+<span class="kw">export const</span> appConfig: <span class="cl">ApplicationConfig</span> = {
+  providers: [
+    <span class="fn">provideRouter</span>(routes),
+    <span class="fn">provideHttpClient</span>()
+  ]
+};</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 5 Angular -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 05</div>
+      <div class="step-info">
+        <h3>app.component.ts — Component Logic</h3>
+        <div class="path">src/app/<span>app.component.ts</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-wrap">
+        <div class="code-lang">typescript</div>
+        <pre><code><span class="kw">import</span> { Component, OnInit } <span class="kw">from</span> <span class="st">'@angular/core'</span>;
+<span class="kw">import</span> { CommonModule } <span class="kw">from</span> <span class="st">'@angular/common'</span>;
+<span class="kw">import</span> { FormsModule } <span class="kw">from</span> <span class="st">'@angular/forms'</span>;
+<span class="kw">import</span> { StudentService } <span class="kw">from</span> <span class="st">'./services/student.service'</span>;
+<span class="kw">import</span> { Student } <span class="kw">from</span> <span class="st">'./models/student'</span>;
+
+<span class="an">@Component</span>({
+  selector: <span class="st">'app-root'</span>,
+  standalone: <span class="kw">true</span>,
+  imports: [CommonModule, FormsModule],
+  templateUrl: <span class="st">'./app.component.html'</span>,
+  styleUrl: <span class="st">'./app.component.css'</span>
+})
+<span class="kw">export class</span> <span class="cl">AppComponent</span> <span class="kw">implements</span> <span class="cl">OnInit</span> {
+
+  students: <span class="cl">Student</span>[] = [];
+  newStudent: <span class="cl">Student</span> = { name: <span class="st">''</span>, email: <span class="st">''</span> };
+  successMessage = <span class="st">''</span>;
+
+  <span class="kw">constructor</span>(<span class="kw">private</span> studentService: <span class="cl">StudentService</span>) {}
+
+  <span class="fn">ngOnInit</span>(): <span class="ty">void</span> {
+    <span class="kw">this</span>.<span class="fn">loadStudents</span>();
+  }
+
+  <span class="fn">loadStudents</span>(): <span class="ty">void</span> {
+    <span class="kw">this</span>.studentService.<span class="fn">getAllStudents</span>().<span class="fn">subscribe</span>({
+      next: (data) => <span class="kw">this</span>.students = data,
+      error: (err) => console.<span class="fn">error</span>(<span class="st">'Error loading students'</span>, err)
+    });
+  }
+
+  <span class="fn">addStudent</span>(): <span class="ty">void</span> {
+    <span class="kw">if</span> (!<span class="kw">this</span>.newStudent.name || !<span class="kw">this</span>.newStudent.email) <span class="kw">return</span>;
+
+    <span class="kw">this</span>.studentService.<span class="fn">addStudent</span>(<span class="kw">this</span>.newStudent).<span class="fn">subscribe</span>({
+      next: (student) => {
+        <span class="kw">this</span>.students.<span class="fn">push</span>(student);
+        <span class="kw">this</span>.newStudent = { name: <span class="st">''</span>, email: <span class="st">''</span> };
+        <span class="kw">this</span>.successMessage = <span class="st">'Student added successfully!'</span>;
+        <span class="fn">setTimeout</span>(() => <span class="kw">this</span>.successMessage = <span class="st">''</span>, <span class="num">3000</span>);
+      },
+      error: (err) => console.<span class="fn">error</span>(<span class="st">'Error adding student'</span>, err)
+    });
+  }
+}</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 6 Angular -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 06</div>
+      <div class="step-info">
+        <h3>app.component.html — UI Template</h3>
+        <div class="path">src/app/<span>app.component.html</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-wrap">
+        <div class="code-lang">html</div>
+        <pre><code><span class="kw">&lt;div</span> <span class="prop">class</span>=<span class="st">"container"</span><span class="kw">&gt;</span>
+
+  <span class="kw">&lt;h1&gt;</span>Student Management<span class="kw">&lt;/h1&gt;</span>
+
+  <span class="cm">&lt;!-- Add Student Form --&gt;</span>
+  <span class="kw">&lt;div</span> <span class="prop">class</span>=<span class="st">"form-card"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;h2&gt;</span>Add New Student<span class="kw">&lt;/h2&gt;</span>
+
+    <span class="kw">&lt;input</span>
+      <span class="prop">type</span>=<span class="st">"text"</span>
+      <span class="prop">placeholder</span>=<span class="st">"Student Name"</span>
+      <span class="an">[(ngModel)]</span>=<span class="st">"newStudent.name"</span>
+    <span class="kw">/&gt;</span>
+
+    <span class="kw">&lt;input</span>
+      <span class="prop">type</span>=<span class="st">"email"</span>
+      <span class="prop">placeholder</span>=<span class="st">"Student Email"</span>
+      <span class="an">[(ngModel)]</span>=<span class="st">"newStudent.email"</span>
+    <span class="kw">/&gt;</span>
+
+    <span class="kw">&lt;button</span> <span class="an">(click)</span>=<span class="st">"addStudent()"</span><span class="kw">&gt;</span>Add Student<span class="kw">&lt;/button&gt;</span>
+    <span class="kw">&lt;p</span> <span class="prop">class</span>=<span class="st">"success"</span> <span class="an">*ngIf</span>=<span class="st">"successMessage"</span><span class="kw">&gt;</span>{{ successMessage }}<span class="kw">&lt;/p&gt;</span>
+  <span class="kw">&lt;/div&gt;</span>
+
+  <span class="cm">&lt;!-- Student List --&gt;</span>
+  <span class="kw">&lt;div</span> <span class="prop">class</span>=<span class="st">"list-card"</span><span class="kw">&gt;</span>
+    <span class="kw">&lt;h2&gt;</span>Students ({{ students.length }})<span class="kw">&lt;/h2&gt;</span>
+
+    <span class="kw">&lt;p</span> <span class="prop">class</span>=<span class="st">"empty"</span> <span class="an">*ngIf</span>=<span class="st">"students.length === 0"</span><span class="kw">&gt;</span>
+      No students yet. Add one above!
+    <span class="kw">&lt;/p&gt;</span>
+
+    <span class="kw">&lt;table</span> <span class="an">*ngIf</span>=<span class="st">"students.length &gt; 0"</span><span class="kw">&gt;</span>
+      <span class="kw">&lt;thead&gt;&lt;tr&gt;</span>
+        <span class="kw">&lt;th&gt;</span>ID<span class="kw">&lt;/th&gt;&lt;th&gt;</span>Name<span class="kw">&lt;/th&gt;&lt;th&gt;</span>Email<span class="kw">&lt;/th&gt;</span>
+      <span class="kw">&lt;/tr&gt;&lt;/thead&gt;</span>
+      <span class="kw">&lt;tbody&gt;</span>
+        <span class="kw">&lt;tr</span> <span class="an">*ngFor</span>=<span class="st">"let student of students"</span><span class="kw">&gt;</span>
+          <span class="kw">&lt;td&gt;</span>{{ student.id }}<span class="kw">&lt;/td&gt;</span>
+          <span class="kw">&lt;td&gt;</span>{{ student.name }}<span class="kw">&lt;/td&gt;</span>
+          <span class="kw">&lt;td&gt;</span>{{ student.email }}<span class="kw">&lt;/td&gt;</span>
+        <span class="kw">&lt;/tr&gt;</span>
+      <span class="kw">&lt;/tbody&gt;</span>
+    <span class="kw">&lt;/table&gt;</span>
+  <span class="kw">&lt;/div&gt;</span>
+
+<span class="kw">&lt;/div&gt;</span></code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 7 Angular -->
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">STEP 07</div>
+      <div class="step-info">
+        <h3>app.component.css — Styling</h3>
+        <div class="path">src/app/<span>app.component.css</span></div>
+      </div>
+    </div>
+    <div class="step-body">
+      <div class="code-wrap">
+        <div class="code-lang">css</div>
+        <pre><code><span class="cl">.container</span> {
+  <span class="prop">max-width</span>: <span class="num">800px</span>;
+  <span class="prop">margin</span>: <span class="num">40px</span> auto;
+  <span class="prop">padding</span>: <span class="num">0 20px</span>;
+  <span class="prop">font-family</span>: <span class="st">Arial, sans-serif</span>;
+}
+<span class="cl">.form-card</span>, <span class="cl">.list-card</span> {
+  <span class="prop">background</span>: <span class="num">#fff</span>;
+  <span class="prop">border-radius</span>: <span class="num">8px</span>;
+  <span class="prop">padding</span>: <span class="num">24px</span>;
+  <span class="prop">margin-bottom</span>: <span class="num">24px</span>;
+  <span class="prop">box-shadow</span>: <span class="num">0 2px 8px</span> rgba(<span class="num">0,0,0,0.1</span>);
+}
+<span class="cl">input</span> {
+  <span class="prop">display</span>: block; <span class="prop">width</span>: <span class="num">100%</span>;
+  <span class="prop">padding</span>: <span class="num">10px</span>; <span class="prop">margin-bottom</span>: <span class="num">12px</span>;
+  <span class="prop">border</span>: <span class="num">1px</span> solid <span class="num">#ddd</span>;
+  <span class="prop">border-radius</span>: <span class="num">4px</span>; <span class="prop">font-size</span>: <span class="num">14px</span>;
+  <span class="prop">box-sizing</span>: border-box;
+}
+<span class="cl">button</span> {
+  <span class="prop">background</span>: <span class="num">#1976d2</span>; <span class="prop">color</span>: white;
+  <span class="prop">border</span>: none; <span class="prop">padding</span>: <span class="num">10px 24px</span>;
+  <span class="prop">border-radius</span>: <span class="num">4px</span>; <span class="prop">cursor</span>: pointer;
+}
+<span class="cl">button:hover</span> { <span class="prop">background</span>: <span class="num">#1565c0</span>; }
+<span class="cl">table</span> { <span class="prop">width</span>: <span class="num">100%</span>; <span class="prop">border-collapse</span>: collapse; }
+<span class="cl">th, td</span> { <span class="prop">padding</span>: <span class="num">12px</span>; <span class="prop">border-bottom</span>: <span class="num">1px</span> solid <span class="num">#eee</span>; }
+<span class="cl">th</span> { <span class="prop">background</span>: <span class="num">#f5f5f5</span>; }
+<span class="cl">.success</span> { <span class="prop">color</span>: green; }
+<span class="cl">.empty</span> { <span class="prop">color</span>: <span class="num">#999</span>; <span class="prop">text-align</span>: center; }</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Run Angular -->
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+      <div class="label">WSL Terminal 2 — Run Angular</div>
+    </div>
+    <pre><code><span class="prompt">~$</span> <span class="cmd">ng serve</span>
+
+<span class="success">  ✓ Compiled successfully</span>
+<span class="out">  Application bundle generation complete.</span>
+
+<span class="out">  Open browser → </span><span class="cmd">http://localhost:4200</span></code></pre>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- WHAT HAPPENS -->
+  <div class="section-label">
+    <span class="num">05</span>
+    <h2>What <span>Happens</span> Behind the Scenes</h2>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:40px">
+    <div class="flow-steps">
+      <h3>📄 When the Page Loads</h3>
+      <div class="flow-step-item">
+        <div class="step-circle pink">1</div>
+        <div class="step-text">Angular starts and calls <strong>ngOnInit()</strong></div>
+      </div>
+      <div class="flow-step-item">
+        <div class="step-circle blue">2</div>
+        <div class="step-text">Sends <strong>GET /api/students</strong> to Spring Boot</div>
+      </div>
+      <div class="flow-step-item">
+        <div class="step-circle green">3</div>
+        <div class="step-text">Spring Boot <strong>fetches all students</strong> from H2</div>
+      </div>
+      <div class="flow-step-item">
+        <div class="step-circle blue">4</div>
+        <div class="step-text">Returns <strong>JSON list</strong> to Angular</div>
+      </div>
+      <div class="flow-step-item">
+        <div class="step-circle pink">5</div>
+        <div class="step-text">Angular <strong>displays them</strong> in the table</div>
+      </div>
+    </div>
+    <div class="flow-steps">
+      <h3>➕ When You Add a Student</h3>
+      <div class="flow-step-item">
+        <div class="step-circle pink">1</div>
+        <div class="step-text">You fill the form and click <strong>Add Student</strong></div>
+      </div>
+      <div class="flow-step-item">
+        <div class="step-circle blue">2</div>
+        <div class="step-text">Angular sends <strong>POST /api/students</strong></div>
+      </div>
+      <div class="flow-step-item">
+        <div class="step-circle green">3</div>
+        <div class="step-text">Spring Boot <strong>saves to H2</strong> database</div>
+      </div>
+      <div class="flow-step-item">
+        <div class="step-circle green">4</div>
+        <div class="step-text">Returns saved student <strong>with generated ID</strong></div>
+      </div>
+      <div class="flow-step-item">
+        <div class="step-circle pink">5</div>
+        <div class="step-text">Angular <strong>adds it to the table</strong> instantly</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- RUNNING THE APP -->
+  <div class="section-label">
+    <span class="num">06</span>
+    <h2>Running the <span>Full App</span></h2>
+  </div>
+
+  <div class="run-grid">
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <div class="label">Terminal 1 — Backend</div>
+      </div>
+      <pre><code><span class="prompt">~$</span> <span class="cmd">cd ~/students</span>
+<span class="prompt">~$</span> <span class="cmd">./mvnw spring-boot:run</span>
+<span class="success">  → Running on :8080</span></code></pre>
+    </div>
+    <div class="terminal">
+      <div class="terminal-bar">
+        <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+        <div class="label">Terminal 2 — Frontend</div>
+      </div>
+      <pre><code><span class="prompt">~$</span> <span class="cmd">cd ~/student-app</span>
+<span class="prompt">~$</span> <span class="cmd">ng serve</span>
+<span class="success">  → Running on :4200</span></code></pre>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- IMPORTANT NOTES -->
+  <div class="section-label">
+    <span class="num">07</span>
+    <h2>Important <span>Notes</span></h2>
+  </div>
+
+  <div class="notes-grid">
+    <div class="note-card">
+      <div class="note-title">⚡ H2 In-Memory Database</div>
+      <p>Data is lost when Spring Boot stops. This is fine for learning. To persist data permanently, switch to MySQL or PostgreSQL when ready.</p>
+    </div>
+    <div class="note-card">
+      <div class="note-title">🔗 @CrossOrigin</div>
+      <p>This annotation lets Angular on port <code>4200</code> call Spring Boot on port <code>8080</code>. Without it the browser blocks the request (CORS policy).</p>
+    </div>
+    <div class="note-card">
+      <div class="note-title">🌐 Ports</div>
+      <p>Spring Boot runs on <code>localhost:8080</code> and Angular runs on <code>localhost:4200</code>. Both must be running at the same time.</p>
+    </div>
+    <div class="note-card">
+      <div class="note-title">📦 JpaRepository</div>
+      <p>Extending JpaRepository gives you <code>findAll()</code>, <code>save()</code>, <code>delete()</code> and more — all for free with zero implementation code.</p>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- NEXT STEPS -->
+  <div class="section-label">
+    <span class="num">08</span>
+    <h2>Suggested <span>Next Steps</span></h2>
+  </div>
+
+  <div class="next-grid">
+    <div class="next-card">
+      <div class="icon">🗑️</div>
+      <h4>Delete Student</h4>
+      <p>Add a DELETE /api/students/{id} endpoint and a delete button in Angular</p>
+    </div>
+    <div class="next-card">
+      <div class="icon">✏️</div>
+      <h4>Edit Student</h4>
+      <p>Add a PUT /api/students/{id} endpoint and an edit form in Angular</p>
+    </div>
+    <div class="next-card">
+      <div class="icon">🛡️</div>
+      <h4>Add Validation</h4>
+      <p>Prevent empty names, duplicate emails, or invalid email formats</p>
+    </div>
+    <div class="next-card">
+      <div class="icon">🗄️</div>
+      <h4>Switch to MySQL</h4>
+      <p>Replace H2 with MySQL so data persists permanently between restarts</p>
+    </div>
+    <div class="next-card">
+      <div class="icon">🧭</div>
+      <h4>Angular Routing</h4>
+      <p>Add multiple pages — a list page, a detail page, and an add page</p>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
