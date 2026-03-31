@@ -1,0 +1,1368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Full Stack Dev Guide — Student App + Database Migration</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:#0b0d12;--surf:#111318;--surf2:#181b23;--surf3:#1e2230;
+  --border:#232736;--border2:#2d3347;
+  --spring:#4ade80;--angular:#f472b6;--api:#60a5fa;
+  --yellow:#fbbf24;--purple:#a78bfa;--cyan:#22d3ee;
+  --mysql:#f97316;--pg:#38bdf8;
+  --green2:#86efac;--orange:#fb923c;--red:#f87171;
+  --text:#e2e8f0;--dim:#94a3b8;--muted:#4b5563;
+  --codebg:#07090d;--r:10px;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--text);font-family:'Outfit',sans-serif;font-weight:400;line-height:1.7;min-height:100vh}
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(96,165,250,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(96,165,250,.02) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;z-index:0}
+.sidebar{position:fixed;top:0;left:0;width:232px;height:100vh;background:var(--surf);border-right:1px solid var(--border);overflow-y:auto;z-index:100;padding:0 0 40px;display:flex;flex-direction:column}
+.sidebar::-webkit-scrollbar{width:4px}
+.sidebar::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid var(--border)}
+.sb-logo .t{font-weight:700;font-size:13px;color:var(--text);line-height:1.3}
+.sb-logo .s{font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--dim);margin-top:3px}
+.guide-tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.gtab{flex:1;padding:10px 0;text-align:center;font-size:11.5px;font-weight:600;cursor:pointer;color:var(--dim);border-bottom:2px solid transparent;transition:all .15s;user-select:none}
+.gtab:hover{color:var(--text);background:var(--surf2)}
+.gtab.active{color:var(--spring);border-bottom-color:var(--spring);background:rgba(74,222,128,.04)}
+.gtab.active.db-tab{color:var(--mysql);border-bottom-color:var(--mysql);background:rgba(249,115,22,.04)}
+.nav-panel{display:none;flex:1;overflow-y:auto}
+.nav-panel.visible{display:block}
+.sb-sec{padding:10px 16px 2px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-top:4px}
+.sb-a{display:flex;align-items:center;gap:8px;padding:7px 16px;font-size:12px;color:var(--dim);text-decoration:none;border-left:2px solid transparent;transition:all .15s;cursor:pointer}
+.sb-a:hover{color:var(--text);background:var(--surf2)}
+.sb-a.on{color:var(--spring);border-left-color:var(--spring);background:rgba(74,222,128,.05)}
+.sb-a.on-db{color:var(--mysql);border-left-color:var(--mysql);background:rgba(249,115,22,.05)}
+.sb-d{width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.45;flex-shrink:0}
+.main{margin-left:232px;position:relative;z-index:1}
+.guide-page{display:none;padding:0 50px 120px;max-width:980px}
+.guide-page.visible{display:block}
+.hero{padding:60px 0 48px;border-bottom:1px solid var(--border);margin-bottom:48px}
+.ey{display:inline-flex;align-items:center;gap:10px;font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--spring);letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px}
+.ey::before{content:'';width:20px;height:1px;background:var(--spring)}
+.ey.db-ey{color:var(--mysql)}
+.ey.db-ey::before{background:var(--mysql)}
+.hero h1{font-weight:800;font-size:clamp(1.8rem,3.5vw,2.8rem);line-height:1.1;letter-spacing:-.03em;margin-bottom:12px}
+.hero h1 em{font-style:normal;background:linear-gradient(120deg,var(--spring),var(--api));-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:14px;color:var(--dim);max-width:520px;margin-bottom:26px;line-height:1.8}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:5px 13px;border-radius:999px;font-size:12px;font-weight:500;border:1px solid}
+.p-sp{background:rgba(74,222,128,.07);border-color:rgba(74,222,128,.2);color:var(--spring)}
+.p-ng{background:rgba(244,114,182,.07);border-color:rgba(244,114,182,.2);color:var(--angular)}
+.p-db{background:rgba(96,165,250,.07);border-color:rgba(96,165,250,.2);color:var(--api)}
+.p-h2{background:rgba(74,222,128,.07);border-color:rgba(74,222,128,.2);color:var(--spring)}
+.p-my{background:rgba(249,115,22,.07);border-color:rgba(249,115,22,.2);color:var(--mysql)}
+.p-pg{background:rgba(56,189,248,.07);border-color:rgba(56,189,248,.2);color:var(--pg)}
+.pdot{width:5px;height:5px;border-radius:50%;background:currentColor}
+.sec{margin-bottom:52px;scroll-margin-top:24px}
+.sh{display:flex;align-items:center;gap:12px;margin-bottom:20px;padding-bottom:13px;border-bottom:1px solid var(--border)}
+.sn{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--surf2);border:1px solid var(--border);border-radius:5px;padding:2px 8px}
+.sh h2{font-weight:700;font-size:1.25rem;letter-spacing:-.02em}
+.a-sp{color:var(--spring)}.a-ng{color:var(--angular)}.a-ap{color:var(--api)}.a-my{color:var(--mysql)}.a-pg{color:var(--pg)}
+.xp{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:16px 20px;margin-bottom:14px;font-size:13.5px;color:var(--dim);line-height:1.85}
+.xp strong,.sb strong{color:var(--text);font-weight:600}
+.xp code,.sb code{font-family:'JetBrains Mono',monospace;font-size:11.5px;background:var(--surf3);color:var(--api);padding:1px 5px;border-radius:4px}
+.card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);margin-bottom:14px;overflow:hidden}
+.ch{display:flex;align-items:flex-start;gap:12px;padding:13px 17px;border-bottom:1px solid var(--border);background:var(--surf2)}
+.ch.mysql-border{border-left:3px solid var(--mysql)}
+.ch.pg-border{border-left:3px solid var(--pg)}
+.ch.neutral-border{border-left:3px solid var(--api)}
+.cbg{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);background:var(--surf);border:1px solid var(--border);border-radius:5px;padding:2px 8px;white-space:nowrap;margin-top:2px;flex-shrink:0}
+.ci h3{font-weight:600;font-size:14px;margin-bottom:2px}
+.fp{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted)}
+.fp span{color:var(--yellow)}
+.cb{padding:14px 17px}
+.sb{font-size:13.5px;color:var(--dim);line-height:1.85;margin-bottom:10px}
+.note{padding:10px 14px;border-radius:7px;margin-bottom:10px;font-size:13px;line-height:1.7;border-left:3px solid}
+.nb{background:rgba(96,165,250,.05);border-color:var(--api);color:var(--dim)}
+.ng{background:rgba(74,222,128,.05);border-color:var(--spring);color:var(--dim)}
+.ny{background:rgba(251,191,36,.05);border-color:var(--yellow);color:var(--dim)}
+.nm2{background:rgba(249,115,22,.05);border-color:var(--mysql);color:var(--dim)}
+.npg{background:rgba(56,189,248,.05);border-color:var(--pg);color:var(--dim)}
+.note strong{color:var(--text)}
+.note code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--surf3);color:var(--api);padding:1px 4px;border-radius:4px}
+.cw{border-radius:8px;overflow:hidden;border:1px solid var(--border);margin-bottom:4px}
+.cb2{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:var(--surf2);border-bottom:1px solid var(--border)}
+.cl2{font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+.cp{display:inline-flex;align-items:center;gap:5px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);background:var(--surf3);border:1px solid var(--border2);border-radius:5px;padding:3px 10px;cursor:pointer;transition:all .15s;user-select:none}
+.cp:hover{color:var(--text);border-color:var(--spring);background:rgba(74,222,128,.06)}
+.cp.ok{color:var(--spring);border-color:var(--spring)}
+.cp svg{width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+pre{background:var(--codebg);padding:17px 19px;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.8}
+pre code{background:none;padding:0;color:var(--text);font-size:inherit;border-radius:0}
+pre[contenteditable]{outline:none;cursor:text;transition:box-shadow 0.2s}
+pre[contenteditable]:focus{box-shadow:inset 0 0 0 2px var(--spring);background:#050709}
+.edit-badge{font-family:'JetBrains Mono',monospace;font-size:9px;color:#4ade80;opacity:.6;margin-left:8px;letter-spacing:.04em}
+.reset-btn{display:inline-flex;align-items:center;gap:4px;font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--dim);background:transparent;border:none;cursor:pointer;padding:3px 6px;border-radius:4px;transition:color .15s;margin-left:4px}
+.reset-btn:hover{color:#f87171}
+.reset-btn svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+.kw{color:#a78bfa}.cl{color:#4ade80}.an{color:#fb923c}.st{color:#86efac}
+.cm{color:#374151}.fn{color:#60a5fa}.ty{color:#fcd34d}.nm{color:#f87171}
+.pr{color:#22d3ee}.ht{color:#60a5fa}.ha{color:#86efac}.hd{color:#fb923c}
+.hc{color:#374151}.ok2{color:#4ade80}.out{color:#4b5563}
+.tbl{width:100%;border-collapse:collapse;font-size:13px;background:var(--surf);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:12px}
+.tbl th{text-align:left;padding:8px 12px;background:var(--surf2);color:var(--dim);font-weight:500;font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--border)}
+.tbl td{padding:8px 12px;border-bottom:1px solid var(--border);color:var(--dim);vertical-align:top}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:nth-child(even) td{background:rgba(255,255,255,.01)}
+.tbl td:first-child{color:var(--text);font-weight:500}
+.tbl code{font-family:'JetBrains Mono',monospace;font-size:10.5px;background:var(--surf3);color:var(--api);padding:1px 4px;border-radius:3px}
+.cmp{width:100%;border-collapse:collapse;font-size:13px;background:var(--surf);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:14px}
+.cmp th{text-align:left;padding:10px 14px;background:var(--surf2);color:var(--dim);font-weight:500;font-size:11px;letter-spacing:.04em;text-transform:uppercase;border-bottom:1px solid var(--border)}
+.cmp th.mysql-h{color:var(--mysql);background:rgba(249,115,22,.08)}
+.cmp th.pg-h{color:var(--pg);background:rgba(56,189,248,.08)}
+.cmp td{padding:10px 14px;border-bottom:1px solid var(--border);color:var(--dim);vertical-align:top;font-size:13px}
+.cmp tr:last-child td{border-bottom:none}
+.cmp tr:nth-child(even) td{background:rgba(255,255,255,.012)}
+.cmp td:first-child{color:var(--text);font-weight:500;width:22%}
+.cmp code{font-family:'JetBrains Mono',monospace;font-size:11px;background:var(--surf3);color:var(--api);padding:1px 5px;border-radius:4px}
+.win{color:var(--spring);font-weight:600}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.ft{font-size:12.5px;font-weight:600;margin-bottom:9px}
+.fl{display:flex;flex-direction:column;gap:6px}
+.fi{display:flex;gap:11px;padding:9px 13px;background:var(--surf);border:1px solid var(--border);border-radius:7px;align-items:flex-start}
+.fn2{width:21px;height:21px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:700;flex-shrink:0;margin-top:2px}
+.ng2{background:rgba(74,222,128,.12);color:var(--spring);border:1px solid rgba(74,222,128,.25)}
+.nb2{background:rgba(96,165,250,.12);color:var(--api);border:1px solid rgba(96,165,250,.25)}
+.np2{background:rgba(244,114,182,.12);color:var(--angular);border:1px solid rgba(244,114,182,.25)}
+.ft2{font-size:13px;color:var(--dim);line-height:1.65}
+.ft2 strong{color:var(--text)}
+.ng3{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.nc2{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);padding:15px 17px;transition:border-color .2s,transform .2s}
+.nc2:hover{border-color:var(--border2);transform:translateY(-1px)}
+.nt{font-weight:600;font-size:13px;margin-bottom:4px}
+.nc2 p{font-size:12px;color:var(--dim);line-height:1.6}
+.nc2 code{font-family:'JetBrains Mono',monospace;font-size:10px;background:var(--surf2);color:var(--api);padding:1px 4px;border-radius:3px}
+.div{height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent);margin:40px 0}
+.sg{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px}
+.diff-wrap{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.diff-card{background:var(--surf);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.diff-hdr{padding:10px 16px;font-size:13px;font-weight:600;border-bottom:1px solid var(--border)}
+.choice-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+.choice-card{border-radius:var(--r);padding:20px;border:2px solid}
+.choice-card.mysql{background:rgba(249,115,22,.06);border-color:rgba(249,115,22,.3)}
+.choice-card.pg{background:rgba(56,189,248,.06);border-color:rgba(56,189,248,.3)}
+.choice-title{font-weight:700;font-size:16px;margin-bottom:10px}
+.choice-card.mysql .choice-title{color:var(--mysql)}
+.choice-card.pg .choice-title{color:var(--pg)}
+.choice-item{font-size:13px;color:var(--dim);margin-bottom:5px;display:flex;gap:8px}
+.choice-item::before{content:'\2713';color:var(--spring);flex-shrink:0}
+@media(max-width:768px){
+  .sidebar{display:none}.main{margin-left:0}
+  .guide-page{padding:0 16px 60px}
+  .fg,.ng3,.sg,.diff-wrap,.choice-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="sb-logo">
+    <div class="t">Full Stack Dev Guide</div>
+    <div class="s">Angular · Spring Boot · MySQL</div>
+  </div>
+  <div class="guide-tabs">
+    <div class="gtab active" id="tab1" onclick="switchGuide(1)">&#128216; Student App</div>
+    <div class="gtab db-tab" id="tab2" onclick="switchGuide(2)">&#128451; Database</div>
+  </div>
+  <div class="nav-panel visible" id="nav1">
+    <div class="sb-sec">Overview</div>
+    <a class="sb-a on" href="#how" onclick="goTo(event,'page1')"><div class="sb-d"></div>How It Works</a>
+    <a class="sb-a" href="#structure" onclick="goTo(event,'page1')"><div class="sb-d"></div>Project Structure</a>
+    <div class="sb-sec">Spring Boot</div>
+    <a class="sb-a" href="#sb1" onclick="goTo(event,'page1')"><div class="sb-d"></div>Project Setup</a>
+    <a class="sb-a" href="#sb2" onclick="goTo(event,'page1')"><div class="sb-d"></div>Student.java</a>
+    <a class="sb-a" href="#sb3" onclick="goTo(event,'page1')"><div class="sb-d"></div>StudentRepository.java</a>
+    <a class="sb-a" href="#sb4" onclick="goTo(event,'page1')"><div class="sb-d"></div>StudentController.java</a>
+    <a class="sb-a" href="#sb5" onclick="goTo(event,'page1')"><div class="sb-d"></div>application.properties</a>
+    <a class="sb-a" href="#sb6" onclick="goTo(event,'page1')"><div class="sb-d"></div>Run Backend</a>
+    <div class="sb-sec">Angular</div>
+    <a class="sb-a" href="#ng1" onclick="goTo(event,'page1')"><div class="sb-d"></div>Create Project</a>
+    <a class="sb-a" href="#ng2" onclick="goTo(event,'page1')"><div class="sb-d"></div>student.ts</a>
+    <a class="sb-a" href="#ng3" onclick="goTo(event,'page1')"><div class="sb-d"></div>student.service.ts</a>
+    <a class="sb-a" href="#ng4" onclick="goTo(event,'page1')"><div class="sb-d"></div>app.config.ts</a>
+    <a class="sb-a" href="#ng5" onclick="goTo(event,'page1')"><div class="sb-d"></div>app.component.ts</a>
+    <a class="sb-a" href="#ng6" onclick="goTo(event,'page1')"><div class="sb-d"></div>app.component.html</a>
+    <a class="sb-a" href="#ng7" onclick="goTo(event,'page1')"><div class="sb-d"></div>app.component.css</a>
+    <a class="sb-a" href="#ng8" onclick="goTo(event,'page1')"><div class="sb-d"></div>Run Frontend</a>
+    <div class="sb-sec">Reference</div>
+    <a class="sb-a" href="#flow" onclick="goTo(event,'page1')"><div class="sb-d"></div>What Happens</a>
+    <a class="sb-a" href="#next" onclick="goTo(event,'page1')"><div class="sb-d"></div>Next Steps</a>
+  </div>
+  <div class="nav-panel" id="nav2">
+    <div class="sb-sec">Overview</div>
+    <a class="sb-a" href="#compare" onclick="goTo(event,'page2')"><div class="sb-d"></div>MySQL vs PostgreSQL</a>
+    <a class="sb-a" href="#what-changes" onclick="goTo(event,'page2')"><div class="sb-d"></div>What Changes</a>
+    <div class="sb-sec" style="color:var(--mysql)">MySQL</div>
+    <a class="sb-a" href="#mysql-install" onclick="goTo(event,'page2')"><div class="sb-d"></div>Install MySQL</a>
+    <a class="sb-a" href="#mysql-setup" onclick="goTo(event,'page2')"><div class="sb-d"></div>Create DB &amp; User</a>
+    <a class="sb-a" href="#mysql-pom" onclick="goTo(event,'page2')"><div class="sb-d"></div>Update pom.xml</a>
+    <a class="sb-a" href="#mysql-props" onclick="goTo(event,'page2')"><div class="sb-d"></div>application.properties</a>
+    <a class="sb-a" href="#mysql-run" onclick="goTo(event,'page2')"><div class="sb-d"></div>Run &amp; Test</a>
+    <div class="sb-sec" style="color:var(--pg)">PostgreSQL</div>
+    <a class="sb-a" href="#pg-install" onclick="goTo(event,'page2')"><div class="sb-d"></div>Install PostgreSQL</a>
+    <a class="sb-a" href="#pg-setup" onclick="goTo(event,'page2')"><div class="sb-d"></div>Create DB &amp; User</a>
+    <a class="sb-a" href="#pg-pom" onclick="goTo(event,'page2')"><div class="sb-d"></div>Update pom.xml</a>
+    <a class="sb-a" href="#pg-props" onclick="goTo(event,'page2')"><div class="sb-d"></div>application.properties</a>
+    <a class="sb-a" href="#pg-run" onclick="goTo(event,'page2')"><div class="sb-d"></div>Run &amp; Test</a>
+    <div class="sb-sec">Reference</div>
+    <a class="sb-a" href="#no-changes" onclick="goTo(event,'page2')"><div class="sb-d"></div>Files Same</a>
+    <a class="sb-a" href="#useful-cmds" onclick="goTo(event,'page2')"><div class="sb-d"></div>Useful Commands</a>
+    <a class="sb-a" href="#troubleshoot" onclick="goTo(event,'page2')"><div class="sb-d"></div>Troubleshooting</a>
+  </div>
+</nav>
+<div class="main">
+  <div class="guide-page visible" id="page1">
+<div class="hero">
+  <div class="ey">Full Stack Reference Guide</div>
+  <h1>Student Management App<br/><em>Angular + Spring Boot</em></h1>
+  <p>Every file documented with detailed explanations and a <strong style="color:var(--spring)">copy button on every code block</strong>. Open in any browser — click Copy and paste straight into your editor.</p>
+  <div class="pills">
+    <div class="pill p-sp"><div class="pdot"></div>Spring Boot · Port 8080</div>
+    <div class="pill p-ng"><div class="pdot"></div>Angular · Port 4200</div>
+    <div class="pill p-db"><div class="pdot"></div>H2 In-Memory Database</div>
+  </div>
+</div>
+
+<!-- HOW IT WORKS -->
+<div class="sec" id="how">
+  <div class="sh"><span class="sn">00</span><h2>How <span class="a-sp">Angular &amp; Spring Boot</span> Work Together</h2></div>
+  <div class="xp"><strong>Angular</strong> is the frontend — what the user sees in the browser. <strong>Spring Boot</strong> is the backend — handles logic, processes data, and talks to the database. They never communicate directly. They talk through a <strong>REST API</strong> using <strong>HTTP requests</strong> and <strong>JSON</strong>. Think of it like a restaurant: Angular is the customer, the REST API is the waiter, Spring Boot is the kitchen.</div>
+  <table class="tbl">
+    <thead><tr><th>Layer</th><th>Technology</th><th>Role</th><th>Port</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--angular)">Frontend</td><td>Angular</td><td>The UI the user sees and clicks in the browser</td><td><code>4200</code></td></tr>
+      <tr><td style="color:var(--api)">Bridge</td><td>REST API</td><td>HTTP requests and JSON responses between the two layers</td><td>—</td></tr>
+      <tr><td style="color:var(--spring)">Backend</td><td>Spring Boot</td><td>Business logic, data processing, database communication</td><td><code>8080</code></td></tr>
+      <tr><td style="color:var(--yellow)">Database</td><td>H2 (In-Memory)</td><td>Stores student records during the session — no install needed</td><td>—</td></tr>
+    </tbody>
+  </table>
+  <table class="tbl">
+    <thead><tr><th>HTTP Method</th><th>Endpoint</th><th>What it does</th></tr></thead>
+    <tbody>
+      <tr><td style="color:var(--spring)">GET</td><td><code>/api/students</code></td><td>Returns all students as a JSON array</td></tr>
+      <tr><td style="color:var(--api)">POST</td><td><code>/api/students</code></td><td>Receives a student JSON object and saves it to the database</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- STRUCTURE -->
+<div class="sec" id="structure">
+  <div class="sh"><span class="sn">01</span><h2>Project <span class="a-ap">Structure</span></h2></div>
+  <div class="sg">
+    <div class="card" style="margin-bottom:0">
+      <div class="ch" style="border-left:3px solid var(--spring)"><div class="ci"><h3 style="color:var(--spring)">Spring Boot — Backend</h3></div></div>
+      <div class="cb" style="padding:12px 15px">
+        <table class="tbl" style="margin:0"><tbody>
+          <tr><td><code>Student.java</code></td><td>Data model — id, name, email fields</td></tr>
+          <tr><td><code>StudentRepository.java</code></td><td>Database access — all CRUD free</td></tr>
+          <tr><td><code>StudentController.java</code></td><td>REST API endpoints handler</td></tr>
+          <tr><td><code>application.properties</code></td><td>H2 database configuration</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="ch" style="border-left:3px solid var(--angular)"><div class="ci"><h3 style="color:var(--angular)">Angular — Frontend</h3></div></div>
+      <div class="cb" style="padding:12px 15px">
+        <table class="tbl" style="margin:0"><tbody>
+          <tr><td><code>models/student.ts</code></td><td>TypeScript interface — student shape</td></tr>
+          <tr><td><code>services/student.service.ts</code></td><td>Makes HTTP calls to Spring Boot</td></tr>
+          <tr><td><code>app.component.ts</code></td><td>Component logic and state</td></tr>
+          <tr><td><code>app.component.html</code></td><td>UI template with Angular directives</td></tr>
+          <tr><td><code>app.component.css</code></td><td>Component-scoped styles</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- SPRING BOOT -->
+<div class="sec" id="sb1">
+  <div class="sh"><span class="sn">02</span><h2><span class="a-sp">Spring Boot</span> — Backend</h2></div>
+  <div class="card">
+    <div class="ch"><span class="cbg">STEP 01</span><div class="ci"><h3>Create the Project — Spring Initializr</h3><div class="fp">Go to <span>https://start.spring.io</span></div></div></div>
+    <div class="cb">
+      <p class="sb">Spring Initializr generates the complete project structure. Configure with the settings below, add the three dependencies, click <strong>Generate</strong>, download the zip, extract it, and move it into WSL.</p>
+      <table class="tbl">
+        <thead><tr><th>Field</th><th>Value</th><th>Why</th></tr></thead>
+        <tbody>
+          <tr><td>Project</td><td>Maven</td><td>Build tool — downloads dependencies and compiles your code</td></tr>
+          <tr><td>Language</td><td>Java</td><td>The language Spring Boot is written in</td></tr>
+          <tr><td>Spring Boot</td><td>3.x.x (latest)</td><td>Always use the latest stable version</td></tr>
+          <tr><td>Group</td><td>com.example</td><td>Package namespace — identifies your organisation</td></tr>
+          <tr><td>Artifact</td><td>students</td><td>Your application name</td></tr>
+          <tr><td>Packaging</td><td>Jar</td><td>Packages the app as a single runnable file</td></tr>
+          <tr><td>Java</td><td>17 or 21</td><td>LTS versions — stable, long-term supported</td></tr>
+        </tbody>
+      </table>
+      <div class="note ng"><strong>Dependencies to add:</strong> Search for and add <strong>Spring Web</strong> (enables REST API + Tomcat server), <strong>Spring Data JPA</strong> (database access layer), and <strong>H2 Database</strong> (in-memory DB — zero setup needed).</div>
+      <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code><span class="cm"># After downloading and extracting the zip</span>
+mv /mnt/c/Users/YourName/Downloads/students ~/students
+cd ~/students</code></pre></div>
+    </div>
+  </div>
+</div>
+
+<!-- Student.java -->
+<div class="card" id="sb2">
+  <div class="ch"><span class="cbg">STEP 02</span><div class="ci"><h3>Student.java — Data Model</h3><div class="fp">src/main/java/com/example/students/<span>Student.java</span></div></div></div>
+  <div class="cb">
+    <p class="sb">This class maps to a database table. Spring Boot reads the annotations and automatically creates a <code>STUDENT</code> table with <code>ID</code>, <code>NAME</code>, and <code>EMAIL</code> columns. <strong>@Entity</strong> marks it as a table. <strong>@Id</strong> marks the primary key. <strong>@GeneratedValue</strong> makes the database auto-generate IDs (1, 2, 3...) so you never set it manually. The getters and setters let Spring Boot read and write the fields when converting between Java objects and JSON.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">java</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="kw">package</span> com.example.students;
+
+<span class="kw">import</span> jakarta.persistence.Entity;
+<span class="kw">import</span> jakarta.persistence.GeneratedValue;
+<span class="kw">import</span> jakarta.persistence.GenerationType;
+<span class="kw">import</span> jakarta.persistence.Id;
+
+<span class="an">@Entity</span>
+<span class="kw">public class</span> <span class="cl">Student</span> {
+
+    <span class="an">@Id</span>
+    <span class="an">@GeneratedValue</span>(strategy = GenerationType.IDENTITY)
+    <span class="kw">private</span> <span class="ty">Long</span> id;
+    <span class="kw">private</span> <span class="ty">String</span> name;
+    <span class="kw">private</span> <span class="ty">String</span> email;
+
+    <span class="kw">public</span> <span class="fn">Student</span>() {}
+
+    <span class="kw">public</span> <span class="fn">Student</span>(<span class="ty">String</span> name, <span class="ty">String</span> email) {
+        <span class="kw">this</span>.name = name;
+        <span class="kw">this</span>.email = email;
+    }
+
+    <span class="cm">// Getters and Setters</span>
+    <span class="kw">public</span> <span class="ty">Long</span>   <span class="fn">getId</span>()    { <span class="kw">return</span> id; }
+    <span class="kw">public</span> <span class="ty">String</span> <span class="fn">getName</span>()  { <span class="kw">return</span> name; }
+    <span class="kw">public</span> <span class="ty">String</span> <span class="fn">getEmail</span>() { <span class="kw">return</span> email; }
+    <span class="kw">public void</span>   <span class="fn">setId</span>(<span class="ty">Long</span> id)        { <span class="kw">this</span>.id = id; }
+    <span class="kw">public void</span>   <span class="fn">setName</span>(<span class="ty">String</span> name)   { <span class="kw">this</span>.name = name; }
+    <span class="kw">public void</span>   <span class="fn">setEmail</span>(<span class="ty">String</span> email) { <span class="kw">this</span>.email = email; }
+}</code></pre></div>
+  </div>
+</div>
+
+<!-- StudentRepository -->
+<div class="card" id="sb3">
+  <div class="ch"><span class="cbg">STEP 03</span><div class="ci"><h3>StudentRepository.java — Database Access</h3><div class="fp">src/main/java/com/example/students/<span>StudentRepository.java</span></div></div></div>
+  <div class="cb">
+    <p class="sb">By extending <strong>JpaRepository</strong> you get all database operations completely for free — no SQL needed at all. Spring generates the entire implementation at runtime. You automatically get <code>findAll()</code>, <code>save()</code>, <code>findById()</code>, <code>deleteById()</code>, <code>count()</code>, and many more. The two types in the angle brackets are the entity type (<strong>Student</strong>) and the ID type (<strong>Long</strong>).</p>
+    <div class="cw"><div class="cb2"><span class="cl2">java</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="kw">package</span> com.example.students;
+
+<span class="kw">import</span> org.springframework.data.jpa.repository.JpaRepository;
+
+<span class="kw">public interface</span> <span class="cl">StudentRepository</span> <span class="kw">extends</span> <span class="cl">JpaRepository</span>&lt;<span class="cl">Student</span>, <span class="ty">Long</span>&gt; {
+}</code></pre></div>
+  </div>
+</div>
+
+<!-- StudentController -->
+<div class="card" id="sb4">
+  <div class="ch"><span class="cbg">STEP 04</span><div class="ci"><h3>StudentController.java — REST API Handler</h3><div class="fp">src/main/java/com/example/students/<span>StudentController.java</span></div></div></div>
+  <div class="cb">
+    <p class="sb"><strong>@RestController</strong> means every method returns JSON data, not a webpage. <strong>@RequestMapping</strong> sets the base URL for all endpoints in this class. <strong>@CrossOrigin</strong> is critical — it allows Angular on port <code>4200</code> to call Spring Boot on port <code>8080</code>. Without it the browser blocks cross-origin requests due to the CORS security policy. <strong>@GetMapping</strong> handles HTTP GET requests. <strong>@PostMapping</strong> handles HTTP POST. <strong>@RequestBody</strong> tells Spring to read the incoming JSON and convert it into a Java Student object automatically.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">java</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="kw">package</span> com.example.students;
+
+<span class="kw">import</span> org.springframework.web.bind.annotation.*;
+<span class="kw">import</span> java.util.List;
+
+<span class="an">@RestController</span>
+<span class="an">@RequestMapping</span>(<span class="st">"/api/students"</span>)
+<span class="an">@CrossOrigin</span>(origins = <span class="st">"http://localhost:4200"</span>)
+<span class="kw">public class</span> <span class="cl">StudentController</span> {
+
+    <span class="kw">private final</span> <span class="cl">StudentRepository</span> repository;
+
+    <span class="kw">public</span> <span class="fn">StudentController</span>(<span class="cl">StudentRepository</span> repository) {
+        <span class="kw">this</span>.repository = repository;
+    }
+
+    <span class="an">@GetMapping</span>
+    <span class="kw">public</span> <span class="ty">List</span>&lt;<span class="cl">Student</span>&gt; <span class="fn">getAllStudents</span>() {
+        <span class="kw">return</span> repository.<span class="fn">findAll</span>();
+    }
+
+    <span class="an">@PostMapping</span>
+    <span class="kw">public</span> <span class="cl">Student</span> <span class="fn">addStudent</span>(<span class="an">@RequestBody</span> <span class="cl">Student</span> student) {
+        <span class="kw">return</span> repository.<span class="fn">save</span>(student);
+    }
+}</code></pre></div>
+  </div>
+</div>
+
+<!-- application.properties -->
+<div class="card" id="sb5">
+  <div class="ch"><span class="cbg">STEP 05</span><div class="ci"><h3>application.properties — H2 Database Config</h3><div class="fp">src/main/resources/<span>application.properties</span></div></div></div>
+  <div class="cb">
+    <p class="sb">Spring Boot's main configuration file using a simple <code>key=value</code> format. These settings connect Spring Boot to the H2 in-memory database. H2 runs entirely inside your app's memory — no separate database server needed. The last line enables the H2 web console at <code>localhost:8080/h2-console</code> so you can inspect the database visually while developing.</p>
+    <div class="note ny"><strong>Remember:</strong> Since H2 is in-memory, all data is lost when Spring Boot stops. This is fine for learning. When ready for production, replace these settings with MySQL or PostgreSQL connection details.</div>
+    <div class="cw"><div class="cb2"><span class="cl2">properties</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="pr">spring.datasource.url</span>=<span class="st">jdbc:h2:mem:studentsdb</span>
+<span class="pr">spring.datasource.driver-class-name</span>=<span class="st">org.h2.Driver</span>
+<span class="pr">spring.datasource.username</span>=<span class="st">sa</span>
+<span class="pr">spring.datasource.password</span>=
+<span class="pr">spring.jpa.database-platform</span>=<span class="st">org.hibernate.dialect.H2Dialect</span>
+<span class="pr">spring.h2.console.enabled</span>=<span class="st">true</span></code></pre></div>
+  </div>
+</div>
+
+<!-- Run Backend -->
+<div class="card" id="sb6">
+  <div class="ch"><span class="cbg">STEP 06</span><div class="ci"><h3>Run the Spring Boot Backend</h3></div></div>
+  <div class="cb">
+    <p class="sb">The <code>mvnw</code> script is included in the generated project and downloads Maven automatically if needed. <strong>spring-boot:run</strong> compiles your code and starts the embedded Tomcat web server on port 8080. Keep this terminal running at all times.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code>cd ~/students
+./mvnw spring-boot:run
+
+<span class="cm"># You should see these lines:</span>
+<span class="ok2">  Tomcat started on port 8080</span>
+<span class="ok2">  Started StudentsApplication in 2.4 seconds</span>
+
+<span class="cm"># Test in your Windows browser:</span>
+  http://localhost:8080/api/students
+<span class="cm"># Expected result: []   empty array means it is working</span></code></pre></div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- ANGULAR -->
+<div class="sec" id="ng1">
+  <div class="sh"><span class="sn">03</span><h2><span class="a-ng">Angular</span> — Frontend</h2></div>
+  <div class="card">
+    <div class="ch"><span class="cbg">STEP 01</span><div class="ci"><h3>Create the Angular Project</h3></div></div>
+    <div class="cb">
+      <p class="sb">Open a <strong>second WSL terminal</strong> — keep Spring Boot running in the first one. <code>ng new</code> generates the complete project structure. Answer <strong>CSS</strong> for stylesheet and <strong>N</strong> for Server-Side Rendering. Then generate the interface and service files.</p>
+      <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code>cd ~
+ng new student-app
+
+<span class="cm"># When prompted:</span>
+<span class="cm">#   Which stylesheet format? → CSS</span>
+<span class="cm">#   Enable Server-Side Rendering? → N</span>
+
+cd student-app
+
+<span class="cm"># Generate the model and service files</span>
+ng generate interface models/student
+ng generate service services/student</code></pre></div>
+    </div>
+  </div>
+</div>
+
+<!-- student.ts -->
+<div class="card" id="ng2">
+  <div class="ch"><span class="cbg">STEP 02</span><div class="ci"><h3>student.ts — TypeScript Interface</h3><div class="fp">src/app/models/<span>student.ts</span></div></div></div>
+  <div class="cb">
+    <p class="sb">An interface defines the shape of a student object in TypeScript. It gives you type safety — Angular knows exactly what properties a student has and catches errors at development time if you use the wrong property names. The <code>?</code> after <strong>id</strong> makes it optional because new students don't have an ID yet — Spring Boot generates it on save — but when Spring Boot returns the saved student it includes the generated ID.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">typescript</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="kw">export interface</span> <span class="cl">Student</span> {
+  id<span class="kw">?</span>: <span class="ty">number</span>;   <span class="cm">// optional — Spring Boot generates this</span>
+  name:  <span class="ty">string</span>;
+  email: <span class="ty">string</span>;
+}</code></pre></div>
+  </div>
+</div>
+
+<!-- student.service.ts -->
+<div class="card" id="ng3">
+  <div class="ch"><span class="cbg">STEP 03</span><div class="ci"><h3>student.service.ts — API Communication</h3><div class="fp">src/app/services/<span>student.service.ts</span></div></div></div>
+  <div class="cb">
+    <p class="sb">The service handles all HTTP communication with Spring Boot. <strong>HttpClient</strong> is Angular's built-in HTTP tool injected via the constructor. Both methods return <strong>Observables</strong> — Angular's way of handling asynchronous operations (things that take time, like network requests). The component subscribes to these and reacts when the data arrives. By isolating API calls in a service the component stays clean and focused only on UI logic.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">typescript</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="kw">import</span> { Injectable } <span class="kw">from</span> <span class="st">'@angular/core'</span>;
+<span class="kw">import</span> { HttpClient } <span class="kw">from</span> <span class="st">'@angular/common/http'</span>;
+<span class="kw">import</span> { Observable } <span class="kw">from</span> <span class="st">'rxjs'</span>;
+<span class="kw">import</span> { <span class="cl">Student</span> } <span class="kw">from</span> <span class="st">'../models/student'</span>;
+
+<span class="an">@Injectable</span>({ providedIn: <span class="st">'root'</span> })
+<span class="kw">export class</span> <span class="cl">StudentService</span> {
+
+  <span class="kw">private</span> apiUrl = <span class="st">'http://localhost:8080/api/students'</span>;
+
+  <span class="kw">constructor</span>(<span class="kw">private</span> http: <span class="cl">HttpClient</span>) {}
+
+  <span class="fn">getAllStudents</span>(): <span class="cl">Observable</span>&lt;<span class="cl">Student</span>[]&gt; {
+    <span class="kw">return this</span>.http.<span class="fn">get</span>&lt;<span class="cl">Student</span>[]&gt;(<span class="kw">this</span>.apiUrl);
+  }
+
+  <span class="fn">addStudent</span>(student: <span class="cl">Student</span>): <span class="cl">Observable</span>&lt;<span class="cl">Student</span>&gt; {
+    <span class="kw">return this</span>.http.<span class="fn">post</span>&lt;<span class="cl">Student</span>&gt;(<span class="kw">this</span>.apiUrl, student);
+  }
+}</code></pre></div>
+  </div>
+</div>
+
+<!-- app.config.ts -->
+<div class="card" id="ng4">
+  <div class="ch"><span class="cbg">STEP 04</span><div class="ci"><h3>app.config.ts — Register HttpClient</h3><div class="fp">src/app/<span>app.config.ts</span></div></div></div>
+  <div class="cb">
+    <p class="sb">Angular uses a providers system to make services available app-wide. <strong>provideHttpClient()</strong> registers Angular's HTTP module so <code>HttpClient</code> can be injected into your service. Without this line Angular throws an error when the service tries to use it. This is the modern standalone approach used in Angular 17+.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">typescript</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="kw">import</span> { ApplicationConfig } <span class="kw">from</span> <span class="st">'@angular/core'</span>;
+<span class="kw">import</span> { provideRouter } <span class="kw">from</span> <span class="st">'@angular/router'</span>;
+<span class="kw">import</span> { <span class="fn">provideHttpClient</span> } <span class="kw">from</span> <span class="st">'@angular/common/http'</span>;
+<span class="kw">import</span> { routes } <span class="kw">from</span> <span class="st">'./app.routes'</span>;
+
+<span class="kw">export const</span> appConfig: <span class="cl">ApplicationConfig</span> = {
+  providers: [
+    <span class="fn">provideRouter</span>(routes),
+    <span class="fn">provideHttpClient</span>()  <span class="cm">// this line is required</span>
+  ]
+};</code></pre></div>
+  </div>
+</div>
+
+<!-- app.component.ts -->
+<div class="card" id="ng5">
+  <div class="ch"><span class="cbg">STEP 05</span><div class="ci"><h3>app.component.ts — Component Logic</h3><div class="fp">src/app/<span>app.component.ts</span></div></div></div>
+  <div class="cb">
+    <p class="sb">The component holds the <strong>state</strong> (list of students, form values, messages) and the <strong>logic</strong> (what happens on load, what happens when you click Add). <strong>ngOnInit()</strong> fires automatically when the component is created — this is where you load initial data. <strong>subscribe()</strong> waits for the Observable to resolve. The <code>next</code> callback runs on success, <code>error</code> on failure. After adding a student the form resets and a success message shows for 3 seconds via <code>setTimeout()</code>.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">typescript</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="kw">import</span> { Component, OnInit } <span class="kw">from</span> <span class="st">'@angular/core'</span>;
+<span class="kw">import</span> { CommonModule } <span class="kw">from</span> <span class="st">'@angular/common'</span>;
+<span class="kw">import</span> { FormsModule } <span class="kw">from</span> <span class="st">'@angular/forms'</span>;
+<span class="kw">import</span> { <span class="cl">StudentService</span> } <span class="kw">from</span> <span class="st">'./services/student.service'</span>;
+<span class="kw">import</span> { <span class="cl">Student</span> } <span class="kw">from</span> <span class="st">'./models/student'</span>;
+
+<span class="an">@Component</span>({
+  selector: <span class="st">'app-root'</span>,
+  standalone: <span class="kw">true</span>,
+  imports: [CommonModule, FormsModule],
+  templateUrl: <span class="st">'./app.component.html'</span>,
+  styleUrl: <span class="st">'./app.component.css'</span>
+})
+<span class="kw">export class</span> <span class="cl">AppComponent</span> <span class="kw">implements</span> <span class="cl">OnInit</span> {
+
+  students: <span class="cl">Student</span>[] = [];
+  newStudent: <span class="cl">Student</span> = { name: <span class="st">''</span>, email: <span class="st">''</span> };
+  successMessage = <span class="st">''</span>;
+
+  <span class="kw">constructor</span>(<span class="kw">private</span> studentService: <span class="cl">StudentService</span>) {}
+
+  <span class="fn">ngOnInit</span>(): <span class="ty">void</span> {
+    <span class="kw">this</span>.<span class="fn">loadStudents</span>();
+  }
+
+  <span class="fn">loadStudents</span>(): <span class="ty">void</span> {
+    <span class="kw">this</span>.studentService.<span class="fn">getAllStudents</span>().<span class="fn">subscribe</span>({
+      next: (data) => <span class="kw">this</span>.students = data,
+      error: (err) => console.<span class="fn">error</span>(<span class="st">'Error loading students'</span>, err)
+    });
+  }
+
+  <span class="fn">addStudent</span>(): <span class="ty">void</span> {
+    <span class="kw">if</span> (!<span class="kw">this</span>.newStudent.name || !<span class="kw">this</span>.newStudent.email) <span class="kw">return</span>;
+
+    <span class="kw">this</span>.studentService.<span class="fn">addStudent</span>(<span class="kw">this</span>.newStudent).<span class="fn">subscribe</span>({
+      next: (student) => {
+        <span class="kw">this</span>.students.<span class="fn">push</span>(student);
+        <span class="kw">this</span>.newStudent = { name: <span class="st">''</span>, email: <span class="st">''</span> };
+        <span class="kw">this</span>.successMessage = <span class="st">'Student added successfully!'</span>;
+        <span class="fn">setTimeout</span>(() => <span class="kw">this</span>.successMessage = <span class="st">''</span>, <span class="nm">3000</span>);
+      },
+      error: (err) => console.<span class="fn">error</span>(<span class="st">'Error adding student'</span>, err)
+    });
+  }
+}</code></pre></div>
+  </div>
+</div>
+
+<!-- app.component.html -->
+<div class="card" id="ng6">
+  <div class="ch"><span class="cbg">STEP 06</span><div class="ci"><h3>app.component.html — UI Template</h3><div class="fp">src/app/<span>app.component.html</span></div></div></div>
+  <div class="cb">
+    <p class="sb">Angular enhances standard HTML with directives. <strong>[(ngModel)]</strong> is two-way data binding — typing in the input updates the component property instantly and vice versa. <strong>*ngIf</strong> shows or hides an element based on a boolean condition. <strong>*ngFor</strong> loops over the students array and renders one table row per student. <strong>(click)</strong> binds a button click to a component method. Replace <em>all</em> the existing content in this file with the code below.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">html</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="ht">&lt;div</span> <span class="ha">class</span>=<span class="st">"container"</span><span class="ht">&gt;</span>
+
+  <span class="ht">&lt;h1&gt;</span>Student Management<span class="ht">&lt;/h1&gt;</span>
+
+  <span class="hc">&lt;!-- Add Student Form --&gt;</span>
+  <span class="ht">&lt;div</span> <span class="ha">class</span>=<span class="st">"form-card"</span><span class="ht">&gt;</span>
+    <span class="ht">&lt;h2&gt;</span>Add New Student<span class="ht">&lt;/h2&gt;</span>
+
+    <span class="ht">&lt;input</span>
+      <span class="ha">type</span>=<span class="st">"text"</span>
+      <span class="ha">placeholder</span>=<span class="st">"Student Name"</span>
+      <span class="hd">[(ngModel)]</span>=<span class="st">"newStudent.name"</span>
+    <span class="ht">/&gt;</span>
+
+    <span class="ht">&lt;input</span>
+      <span class="ha">type</span>=<span class="st">"email"</span>
+      <span class="ha">placeholder</span>=<span class="st">"Student Email"</span>
+      <span class="hd">[(ngModel)]</span>=<span class="st">"newStudent.email"</span>
+    <span class="ht">/&gt;</span>
+
+    <span class="ht">&lt;button</span> <span class="hd">(click)</span>=<span class="st">"addStudent()"</span><span class="ht">&gt;</span>Add Student<span class="ht">&lt;/button&gt;</span>
+    <span class="ht">&lt;p</span> <span class="ha">class</span>=<span class="st">"success"</span> <span class="hd">*ngIf</span>=<span class="st">"successMessage"</span><span class="ht">&gt;</span>{{ successMessage }}<span class="ht">&lt;/p&gt;</span>
+  <span class="ht">&lt;/div&gt;</span>
+
+  <span class="hc">&lt;!-- Student List --&gt;</span>
+  <span class="ht">&lt;div</span> <span class="ha">class</span>=<span class="st">"list-card"</span><span class="ht">&gt;</span>
+    <span class="ht">&lt;h2&gt;</span>Students ({{ students.length }})<span class="ht">&lt;/h2&gt;</span>
+
+    <span class="ht">&lt;p</span> <span class="ha">class</span>=<span class="st">"empty"</span> <span class="hd">*ngIf</span>=<span class="st">"students.length === 0"</span><span class="ht">&gt;</span>
+      No students yet. Add one above!
+    <span class="ht">&lt;/p&gt;</span>
+
+    <span class="ht">&lt;table</span> <span class="hd">*ngIf</span>=<span class="st">"students.length &gt; 0"</span><span class="ht">&gt;</span>
+      <span class="ht">&lt;thead&gt;&lt;tr&gt;</span>
+        <span class="ht">&lt;th&gt;</span>ID<span class="ht">&lt;/th&gt;&lt;th&gt;</span>Name<span class="ht">&lt;/th&gt;&lt;th&gt;</span>Email<span class="ht">&lt;/th&gt;</span>
+      <span class="ht">&lt;/tr&gt;&lt;/thead&gt;</span>
+      <span class="ht">&lt;tbody&gt;</span>
+        <span class="ht">&lt;tr</span> <span class="hd">*ngFor</span>=<span class="st">"let student of students"</span><span class="ht">&gt;</span>
+          <span class="ht">&lt;td&gt;</span>{{ student.id }}<span class="ht">&lt;/td&gt;</span>
+          <span class="ht">&lt;td&gt;</span>{{ student.name }}<span class="ht">&lt;/td&gt;</span>
+          <span class="ht">&lt;td&gt;</span>{{ student.email }}<span class="ht">&lt;/td&gt;</span>
+        <span class="ht">&lt;/tr&gt;</span>
+      <span class="ht">&lt;/tbody&gt;</span>
+    <span class="ht">&lt;/table&gt;</span>
+  <span class="ht">&lt;/div&gt;</span>
+
+<span class="ht">&lt;/div&gt;</span></code></pre></div>
+  </div>
+</div>
+
+<!-- app.component.css -->
+<div class="card" id="ng7">
+  <div class="ch"><span class="cbg">STEP 07</span><div class="ci"><h3>app.component.css — Styling</h3><div class="fp">src/app/<span>app.component.css</span></div></div></div>
+  <div class="cb">
+    <p class="sb">Angular automatically scopes these styles to this component only — they won't affect other parts of the app. The styling is kept intentionally simple to keep the focus on the full stack concepts.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">css</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cl">.container</span> {
+  <span class="pr">max-width</span>: <span class="nm">800px</span>;
+  <span class="pr">margin</span>: <span class="nm">40px</span> auto;
+  <span class="pr">padding</span>: <span class="nm">0 20px</span>;
+  <span class="pr">font-family</span>: <span class="st">Arial, sans-serif</span>;
+}
+<span class="cl">h1</span> { <span class="pr">text-align</span>: center; <span class="pr">color</span>: <span class="nm">#333</span>; <span class="pr">margin-bottom</span>: <span class="nm">30px</span>; }
+<span class="cl">.form-card</span>, <span class="cl">.list-card</span> {
+  <span class="pr">background</span>: <span class="nm">#fff</span>;
+  <span class="pr">border-radius</span>: <span class="nm">8px</span>;
+  <span class="pr">padding</span>: <span class="nm">24px</span>;
+  <span class="pr">margin-bottom</span>: <span class="nm">24px</span>;
+  <span class="pr">box-shadow</span>: <span class="nm">0 2px 8px</span> rgba(<span class="nm">0,0,0,0.1</span>);
+}
+<span class="cl">h2</span> { <span class="pr">color</span>: <span class="nm">#444</span>; <span class="pr">margin-bottom</span>: <span class="nm">16px</span>; }
+<span class="cl">input</span> {
+  <span class="pr">display</span>: block; <span class="pr">width</span>: <span class="nm">100%</span>;
+  <span class="pr">padding</span>: <span class="nm">10px</span>; <span class="pr">margin-bottom</span>: <span class="nm">12px</span>;
+  <span class="pr">border</span>: <span class="nm">1px</span> solid <span class="nm">#ddd</span>; <span class="pr">border-radius</span>: <span class="nm">4px</span>;
+  <span class="pr">font-size</span>: <span class="nm">14px</span>; <span class="pr">box-sizing</span>: border-box;
+}
+<span class="cl">button</span> {
+  <span class="pr">background</span>: <span class="nm">#1976d2</span>; <span class="pr">color</span>: white; <span class="pr">border</span>: none;
+  <span class="pr">padding</span>: <span class="nm">10px 24px</span>; <span class="pr">border-radius</span>: <span class="nm">4px</span>;
+  <span class="pr">font-size</span>: <span class="nm">14px</span>; <span class="pr">cursor</span>: pointer;
+}
+<span class="cl">button:hover</span> { <span class="pr">background</span>: <span class="nm">#1565c0</span>; }
+<span class="cl">table</span> { <span class="pr">width</span>: <span class="nm">100%</span>; <span class="pr">border-collapse</span>: collapse; }
+<span class="cl">th, td</span> { <span class="pr">text-align</span>: left; <span class="pr">padding</span>: <span class="nm">12px</span>; <span class="pr">border-bottom</span>: <span class="nm">1px</span> solid <span class="nm">#eee</span>; }
+<span class="cl">th</span> { <span class="pr">background</span>: <span class="nm">#f5f5f5</span>; <span class="pr">color</span>: <span class="nm">#555</span>; }
+<span class="cl">tr:hover</span> { <span class="pr">background</span>: <span class="nm">#fafafa</span>; }
+<span class="cl">.success</span> { <span class="pr">color</span>: green; <span class="pr">margin-top</span>: <span class="nm">10px</span>; }
+<span class="cl">.empty</span> { <span class="pr">color</span>: <span class="nm">#999</span>; <span class="pr">text-align</span>: center; <span class="pr">padding</span>: <span class="nm">20px</span>; }</code></pre></div>
+  </div>
+</div>
+
+<!-- Run Angular -->
+<div class="card" id="ng8">
+  <div class="ch"><span class="cbg">STEP 08</span><div class="ci"><h3>Run the Angular Frontend</h3></div></div>
+  <div class="cb">
+    <p class="sb"><code>ng serve</code> compiles TypeScript, bundles the app, and starts a dev server with <strong>live reload</strong> — saving any file automatically refreshes the browser. Make sure Spring Boot is still running in Terminal 1.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code>ng serve
+
+<span class="cm"># You should see:</span>
+<span class="ok2">  Compiled successfully</span>
+<span class="ok2">  Application bundle generation complete.</span>
+
+<span class="cm"># Open in your Windows browser:</span>
+  http://localhost:4200</code></pre></div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- WHAT HAPPENS -->
+<div class="sec" id="flow">
+  <div class="sh"><span class="sn">04</span><h2>What Happens <span class="a-ap">Behind the Scenes</span></h2></div>
+  <div class="fg">
+    <div>
+      <p class="ft" style="color:var(--angular)">📄 When the page loads</p>
+      <div class="fl">
+        <div class="fi"><div class="fn2 np2">1</div><div class="ft2">Angular starts and calls <strong>ngOnInit()</strong></div></div>
+        <div class="fi"><div class="fn2 nb2">2</div><div class="ft2">Sends <strong>GET /api/students</strong> to Spring Boot</div></div>
+        <div class="fi"><div class="fn2 ng2">3</div><div class="ft2">Spring Boot runs <strong>SELECT * FROM STUDENT</strong> on H2</div></div>
+        <div class="fi"><div class="fn2 nb2">4</div><div class="ft2">Returns a <strong>JSON array</strong> back to Angular</div></div>
+        <div class="fi"><div class="fn2 np2">5</div><div class="ft2">Angular renders rows using <strong>*ngFor</strong></div></div>
+      </div>
+    </div>
+    <div>
+      <p class="ft" style="color:var(--spring)">➕ When you add a student</p>
+      <div class="fl">
+        <div class="fi"><div class="fn2 np2">1</div><div class="ft2">You type — <strong>[(ngModel)]</strong> updates the component instantly</div></div>
+        <div class="fi"><div class="fn2 np2">2</div><div class="ft2">Click Add Student — <strong>addStudent()</strong> is called</div></div>
+        <div class="fi"><div class="fn2 nb2">3</div><div class="ft2">Angular sends <strong>POST /api/students</strong> with JSON body</div></div>
+        <div class="fi"><div class="fn2 ng2">4</div><div class="ft2">Spring Boot saves it and H2 assigns an <strong>auto ID</strong></div></div>
+        <div class="fi"><div class="fn2 np2">5</div><div class="ft2">Angular adds it to the table <strong>instantly</strong> — no reload</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- NEXT STEPS -->
+<div class="sec" id="next">
+  <div class="sh"><span class="sn">05</span><h2>Suggested <span class="a-ng">Next Steps</span></h2></div>
+  <div class="ng3">
+    <div class="nc2"><div class="nt" style="color:var(--angular)">🗑️ Delete a Student</div><p>Add <code>DELETE /api/students/{id}</code> in Spring Boot with @DeleteMapping and a delete button per row in Angular. Teaches path variables and HTTP DELETE.</p></div>
+    <div class="nc2"><div class="nt" style="color:var(--api)">✏️ Edit a Student</div><p>Add <code>PUT /api/students/{id}</code> in Spring Boot. Add an inline edit form in Angular. Teaches HTTP PUT and conditional rendering.</p></div>
+    <div class="nc2"><div class="nt" style="color:var(--yellow)">🛡️ Add Validation</div><p>Use <code>@NotBlank</code> and <code>@Email</code> on the Student model. Use Angular Validators in the form. Prevents empty or invalid input.</p></div>
+    <div class="nc2"><div class="nt" style="color:var(--spring)">🗄️ Switch to MySQL</div><p>Replace H2 with MySQL for persistent storage. Update <code>application.properties</code> and add the MySQL connector to pom.xml.</p></div>
+    <div class="nc2"><div class="nt" style="color:var(--purple)">🧭 Angular Routing</div><p>Use Angular Router to create multiple pages — list, detail, and add student. Teaches SPA navigation and component architecture.</p></div>
+    <div class="nc2"><div class="nt" style="color:var(--cyan)">🔐 Add Security</div><p>Add Spring Security with JWT so only authenticated users can manage students. Teaches backend security and token-based auth.</p></div>
+  </div>
+</div>
+  </div>
+  <div class="guide-page" id="page2">
+<!-- HERO -->
+<div class="hero">
+  <div class="ey">Database Migration Guide</div>
+  <h1>Switching from H2 to<br/><em>MySQL or PostgreSQL</em></h1>
+  <p>A complete step-by-step guide for both databases. Your Angular frontend and Spring Boot backend stay <strong style="color:var(--spring)">completely unchanged</strong> — only two files need updating.</p>
+  <div class="pills">
+    <div class="pill p-h2"><div class="pdot"></div>From: H2 In-Memory</div>
+    <div class="pill p-my"><div class="pdot"></div>Option A: MySQL</div>
+    <div class="pill p-pg"><div class="pdot"></div>Option B: PostgreSQL</div>
+  </div>
+</div>
+
+<!-- COMPARE -->
+<div class="sec" id="compare">
+  <div class="sh"><span class="sn">00</span><h2>MySQL vs <span class="a-pg">PostgreSQL</span> — Which One?</h2></div>
+
+  <div class="choice-grid">
+    <div class="choice-card mysql">
+      <div class="choice-title">🐬 MySQL</div>
+      <div class="choice-item">Most widely used database in the world</div>
+      <div class="choice-item">Very beginner friendly — easy to learn</div>
+      <div class="choice-item">Huge community and documentation</div>
+      <div class="choice-item">Used by Facebook, Twitter, YouTube</div>
+      <div class="choice-item">Great for web apps and CRUD operations</div>
+      <div class="choice-item">Simpler setup and administration</div>
+    </div>
+    <div class="choice-card pg">
+      <div class="choice-title">🐘 PostgreSQL</div>
+      <div class="choice-item">More advanced features and data types</div>
+      <div class="choice-item">Better for complex queries and analytics</div>
+      <div class="choice-item">Stricter SQL standards compliance</div>
+      <div class="choice-item">Used by Instagram, Spotify, Reddit</div>
+      <div class="choice-item">Better at handling concurrent writes</div>
+      <div class="choice-item">Free and fully open source</div>
+    </div>
+  </div>
+
+  <table class="cmp">
+    <thead>
+      <tr>
+        <th>Feature</th>
+        <th class="mysql-h">MySQL</th>
+        <th class="pg-h">PostgreSQL</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>Beginner friendliness</td><td><span class="win">Easier</span></td><td>Moderate</td></tr>
+      <tr><td>Setup complexity</td><td><span class="win">Simpler</span></td><td>A bit more steps</td></tr>
+      <tr><td>Performance (simple queries)</td><td><span class="win">Slightly faster</span></td><td>Comparable</td></tr>
+      <tr><td>Advanced features</td><td>Good</td><td><span class="win">More powerful</span></td></tr>
+      <tr><td>JSON support</td><td>Basic</td><td><span class="win">Excellent (JSONB)</span></td></tr>
+      <tr><td>Spring Boot compatibility</td><td>Excellent</td><td>Excellent</td></tr>
+      <tr><td>Default port</td><td><code>3306</code></td><td><code>5432</code></td></tr>
+      <tr><td>Best for this project</td><td><span class="win">Recommended for beginners</span></td><td>Good choice too</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ng"><strong>Recommendation:</strong> If this is your first time using a real database, go with <strong>MySQL</strong>. It is simpler to set up and manage. You can always switch to PostgreSQL later as you grow.</div>
+</div>
+
+<!-- WHAT CHANGES -->
+<div class="sec" id="what-changes">
+  <div class="sh"><span class="sn">01</span><h2>What <span class="a-ap">Changes</span> vs What Stays the Same</h2></div>
+
+  <div class="sb">The beauty of Spring Boot's abstraction is that switching databases requires changing <strong>only 2 files</strong>. Your Angular frontend, your Java classes, your controller, and your repository all stay exactly the same.</div>
+
+  <div class="diff-wrap">
+    <div class="diff-card">
+      <div class="diff-hdr" style="background:rgba(74,222,128,.08);color:var(--spring)">✅ Files That Stay the Same</div>
+      <div style="padding:12px 16px">
+        <table class="tbl" style="margin:0">
+          <tbody>
+            <tr><td><code>Student.java</code></td><td>No changes needed</td></tr>
+            <tr><td><code>StudentRepository.java</code></td><td>No changes needed</td></tr>
+            <tr><td><code>StudentController.java</code></td><td>No changes needed</td></tr>
+            <tr><td>All Angular files</td><td>No changes needed</td></tr>
+            <tr><td><code>app.component.*</code></td><td>No changes needed</td></tr>
+            <tr><td><code>student.service.ts</code></td><td>No changes needed</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="diff-card">
+      <div class="diff-hdr" style="background:rgba(251,191,36,.08);color:var(--yellow)">✏️ Files That Change</div>
+      <div style="padding:12px 16px">
+        <table class="tbl" style="margin:0">
+          <tbody>
+            <tr><td><code>pom.xml</code></td><td>Swap H2 dependency for MySQL or PostgreSQL driver</td></tr>
+            <tr><td><code>application.properties</code></td><td>Update database URL, username, password, and dialect</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- MYSQL SECTION                             -->
+<!-- ══════════════════════════════════════════ -->
+<div class="sec" id="mysql-install">
+  <div class="sh">
+    <span class="sn" style="color:var(--mysql);border-color:rgba(249,115,22,.3)">MySQL</span>
+    <h2><span class="a-my">MySQL</span> — Complete Setup Guide</h2>
+  </div>
+
+  <div class="card">
+    <div class="ch mysql-border"><span class="cbg">STEP 01</span><div class="ci"><h3>Install MySQL in WSL</h3></div></div>
+    <div class="cb">
+      <p class="sb">MySQL is not installed by default in WSL. Run these commands in your WSL terminal to install and start it. The installation will take a minute or two.</p>
+      <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Update package list first</span>
+sudo apt update
+
+<span class="cm"># Install MySQL server</span>
+sudo apt install mysql-server -y
+
+<span class="cm"># Start MySQL service</span>
+sudo service mysql start
+
+<span class="cm"># Verify it is running</span>
+sudo service mysql status</code></pre></div>
+      <div class="note nm2"><strong>Auto-start tip:</strong> MySQL does not start automatically when you open WSL. You need to run <code>sudo service mysql start</code> each time you open a new WSL session before running your Spring Boot app.</div>
+    </div>
+  </div>
+</div>
+
+<!-- MySQL Setup DB -->
+<div class="card" id="mysql-setup">
+  <div class="ch mysql-border"><span class="cbg">STEP 02</span><div class="ci"><h3>Create the Database and User</h3></div></div>
+  <div class="cb">
+    <p class="sb">By default MySQL has a root user with no password. Log in and create a dedicated database and user for your app. Using a dedicated user is better practice than using root directly.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Log into MySQL as root (no password needed first time)</span>
+sudo mysql
+
+<span class="cm"># Inside MySQL shell — run these one by one:</span>
+
+<span class="cm"># 1. Create the database</span>
+<span class="an">CREATE DATABASE</span> studentsdb;
+
+<span class="cm"># 2. Create a user with a password</span>
+<span class="an">CREATE USER</span> <span class="st">'springuser'</span>@<span class="st">'localhost'</span> <span class="an">IDENTIFIED BY</span> <span class="st">'password123'</span>;
+
+<span class="cm"># 3. Give the user full access to the database</span>
+<span class="an">GRANT ALL PRIVILEGES ON</span> studentsdb.* <span class="an">TO</span> <span class="st">'springuser'</span>@<span class="st">'localhost'</span>;
+
+<span class="cm"># 4. Apply the changes</span>
+<span class="an">FLUSH PRIVILEGES</span>;
+
+<span class="cm"># 5. Exit MySQL shell</span>
+<span class="an">EXIT</span>;</code></pre></div>
+    <div class="note ny"><strong>Change the password:</strong> Replace <code>password123</code> with a password of your choice. Just remember it — you will need it in <code>application.properties</code>.</div>
+  </div>
+</div>
+
+<!-- MySQL pom.xml -->
+<div class="card" id="mysql-pom">
+  <div class="ch mysql-border"><span class="cbg">STEP 03</span><div class="ci"><h3>Update pom.xml — Swap the Driver Dependency</h3><div class="fp">students/<span>pom.xml</span></div></div></div>
+  <div class="cb">
+    <p class="sb">You need to remove the H2 dependency and add the MySQL connector. Open <code>pom.xml</code> in your project and find the H2 dependency section. Remove it completely and replace it with the MySQL connector shown below.</p>
+    <div class="note ny"><strong>Find and remove this block</strong> from your pom.xml:</div>
+    <div class="cw"><div class="cb2"><span class="cl2">xml — REMOVE THIS</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm">&lt;!-- REMOVE this H2 block --&gt;</span>
+<span class="ht">&lt;dependency&gt;</span>
+    <span class="ht">&lt;groupId&gt;</span>com.h2database<span class="ht">&lt;/groupId&gt;</span>
+    <span class="ht">&lt;artifactId&gt;</span>h2<span class="ht">&lt;/artifactId&gt;</span>
+    <span class="ht">&lt;scope&gt;</span>runtime<span class="ht">&lt;/scope&gt;</span>
+<span class="ht">&lt;/dependency&gt;</span></code></pre></div>
+    <div class="note ng"><strong>Add this MySQL block</strong> in its place:</div>
+    <div class="cw"><div class="cb2"><span class="cl2">xml — ADD THIS</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm">&lt;!-- ADD this MySQL connector --&gt;</span>
+<span class="ht">&lt;dependency&gt;</span>
+    <span class="ht">&lt;groupId&gt;</span>com.mysql<span class="ht">&lt;/groupId&gt;</span>
+    <span class="ht">&lt;artifactId&gt;</span>mysql-connector-j<span class="ht">&lt;/artifactId&gt;</span>
+    <span class="ht">&lt;scope&gt;</span>runtime<span class="ht">&lt;/scope&gt;</span>
+<span class="ht">&lt;/dependency&gt;</span></code></pre></div>
+  </div>
+</div>
+
+<!-- MySQL application.properties -->
+<div class="card" id="mysql-props">
+  <div class="ch mysql-border"><span class="cbg">STEP 04</span><div class="ci"><h3>Update application.properties</h3><div class="fp">src/main/resources/<span>application.properties</span></div></div></div>
+  <div class="cb">
+    <p class="sb">Replace the entire contents of your <code>application.properties</code> file with the MySQL configuration below. This tells Spring Boot how to connect to MySQL instead of H2. The <code>ddl-auto=update</code> setting means Spring Boot will automatically create and update your database tables based on your entity classes — you never write SQL manually.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">properties</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm"># MySQL Connection</span>
+<span class="pr">spring.datasource.url</span>=<span class="st">jdbc:mysql://localhost:3306/studentsdb?useSSL=false&serverTimezone=UTC</span>
+<span class="pr">spring.datasource.username</span>=<span class="st">springuser</span>
+<span class="pr">spring.datasource.password</span>=<span class="st">password123</span>
+<span class="pr">spring.datasource.driver-class-name</span>=<span class="st">com.mysql.cj.jdbc.Driver</span>
+
+<span class="cm"># JPA / Hibernate</span>
+<span class="pr">spring.jpa.database-platform</span>=<span class="st">org.hibernate.dialect.MySQLDialect</span>
+<span class="pr">spring.jpa.hibernate.ddl-auto</span>=<span class="st">update</span>
+<span class="pr">spring.jpa.show-sql</span>=<span class="st">true</span></code></pre></div>
+    <table class="tbl" style="margin-top:12px">
+      <thead><tr><th>Property</th><th>Value</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>datasource.url</code></td><td><code>jdbc:mysql://localhost:3306/studentsdb</code></td><td>Connects to MySQL on port 3306, database named studentsdb</td></tr>
+        <tr><td><code>username</code></td><td><code>springuser</code></td><td>The MySQL user you created in Step 02</td></tr>
+        <tr><td><code>password</code></td><td><code>password123</code></td><td>The password you set in Step 02</td></tr>
+        <tr><td><code>ddl-auto=update</code></td><td>update</td><td>Auto-creates and updates tables — data persists between restarts</td></tr>
+        <tr><td><code>show-sql=true</code></td><td>true</td><td>Prints SQL queries to the console so you can see what's happening</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- MySQL Run -->
+<div class="card" id="mysql-run">
+  <div class="ch mysql-border"><span class="cbg">STEP 05</span><div class="ci"><h3>Run and Test with MySQL</h3></div></div>
+  <div class="cb">
+    <p class="sb">Make sure MySQL is running, then start your Spring Boot app the same way as before. Your data will now persist even after stopping and restarting the app.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">bash — Terminal 1 (make sure MySQL is running)</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Start MySQL if not already running</span>
+sudo service mysql start
+
+<span class="cm"># Run Spring Boot — same command as before</span>
+cd ~/students
+./mvnw spring-boot:run</code></pre></div>
+    <div class="note nm2"><strong>What to look for:</strong> You should see <code>Tomcat started on port 8080</code> and no errors. If you see a connection refused error, MySQL is not running — run <code>sudo service mysql start</code> first.</div>
+    <div class="cw"><div class="cb2"><span class="cl2">bash — Terminal 2 (Angular stays the same)</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code>cd ~/student-app
+ng serve</code></pre></div>
+    <div class="cw"><div class="cb2"><span class="cl2">bash — Verify data persists in MySQL</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Log into MySQL and check your data</span>
+sudo mysql -u springuser -p studentsdb
+
+<span class="cm"># Inside MySQL shell:</span>
+<span class="an">SELECT</span> * <span class="an">FROM</span> student;
+<span class="an">EXIT</span>;</code></pre></div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- ══════════════════════════════════════════ -->
+<!-- POSTGRESQL SECTION                        -->
+<!-- ══════════════════════════════════════════ -->
+<div class="sec" id="pg-install">
+  <div class="sh">
+    <span class="sn" style="color:var(--pg);border-color:rgba(56,189,248,.3)">PostgreSQL</span>
+    <h2><span class="a-pg">PostgreSQL</span> — Complete Setup Guide</h2>
+  </div>
+
+  <div class="card">
+    <div class="ch pg-border"><span class="cbg">STEP 01</span><div class="ci"><h3>Install PostgreSQL in WSL</h3></div></div>
+    <div class="cb">
+      <p class="sb">PostgreSQL is not installed by default in WSL. Run these commands to install it and start the service. The installation will take a minute or two.</p>
+      <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Update package list first</span>
+sudo apt update
+
+<span class="cm"># Install PostgreSQL</span>
+sudo apt install postgresql postgresql-contrib -y
+
+<span class="cm"># Start PostgreSQL service</span>
+sudo service postgresql start
+
+<span class="cm"># Verify it is running</span>
+sudo service postgresql status</code></pre></div>
+      <div class="note npg"><strong>Auto-start tip:</strong> PostgreSQL does not start automatically when you open WSL. You need to run <code>sudo service postgresql start</code> each time you open a new WSL session before running your Spring Boot app.</div>
+    </div>
+  </div>
+</div>
+
+<!-- PostgreSQL Setup DB -->
+<div class="card" id="pg-setup">
+  <div class="ch pg-border"><span class="cbg">STEP 02</span><div class="ci"><h3>Create the Database and User</h3></div></div>
+  <div class="cb">
+    <p class="sb">PostgreSQL uses a default system user called <code>postgres</code>. Switch to that user to access the PostgreSQL shell, then create a dedicated database and user for your Spring Boot app.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Switch to the postgres system user</span>
+sudo -i -u postgres
+
+<span class="cm"># Open the PostgreSQL shell</span>
+psql
+
+<span class="cm"># Inside psql shell — run these one by one:</span>
+
+<span class="cm"># 1. Create a user with a password</span>
+<span class="an">CREATE USER</span> springuser <span class="an">WITH PASSWORD</span> <span class="st">'password123'</span>;
+
+<span class="cm"># 2. Create the database owned by that user</span>
+<span class="an">CREATE DATABASE</span> studentsdb <span class="an">OWNER</span> springuser;
+
+<span class="cm"># 3. Grant all privileges</span>
+<span class="an">GRANT ALL PRIVILEGES ON DATABASE</span> studentsdb <span class="an">TO</span> springuser;
+
+<span class="cm"># 4. Exit psql shell</span>
+\q
+
+<span class="cm"># 5. Exit the postgres system user session</span>
+exit</code></pre></div>
+    <div class="note ny"><strong>Change the password:</strong> Replace <code>password123</code> with a password of your choice. Just remember it — you will need it in <code>application.properties</code>.</div>
+  </div>
+</div>
+
+<!-- PostgreSQL pom.xml -->
+<div class="card" id="pg-pom">
+  <div class="ch pg-border"><span class="cbg">STEP 03</span><div class="ci"><h3>Update pom.xml — Swap the Driver Dependency</h3><div class="fp">students/<span>pom.xml</span></div></div></div>
+  <div class="cb">
+    <p class="sb">Remove the H2 dependency and add the PostgreSQL driver. Open <code>pom.xml</code>, find the H2 block, remove it, and replace it with the PostgreSQL driver shown below.</p>
+    <div class="note ny"><strong>Find and remove this block</strong> from your pom.xml:</div>
+    <div class="cw"><div class="cb2"><span class="cl2">xml — REMOVE THIS</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm">&lt;!-- REMOVE this H2 block --&gt;</span>
+<span class="ht">&lt;dependency&gt;</span>
+    <span class="ht">&lt;groupId&gt;</span>com.h2database<span class="ht">&lt;/groupId&gt;</span>
+    <span class="ht">&lt;artifactId&gt;</span>h2<span class="ht">&lt;/artifactId&gt;</span>
+    <span class="ht">&lt;scope&gt;</span>runtime<span class="ht">&lt;/scope&gt;</span>
+<span class="ht">&lt;/dependency&gt;</span></code></pre></div>
+    <div class="note ng"><strong>Add this PostgreSQL block</strong> in its place:</div>
+    <div class="cw"><div class="cb2"><span class="cl2">xml — ADD THIS</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm">&lt;!-- ADD this PostgreSQL driver --&gt;</span>
+<span class="ht">&lt;dependency&gt;</span>
+    <span class="ht">&lt;groupId&gt;</span>org.postgresql<span class="ht">&lt;/groupId&gt;</span>
+    <span class="ht">&lt;artifactId&gt;</span>postgresql<span class="ht">&lt;/artifactId&gt;</span>
+    <span class="ht">&lt;scope&gt;</span>runtime<span class="ht">&lt;/scope&gt;</span>
+<span class="ht">&lt;/dependency&gt;</span></code></pre></div>
+  </div>
+</div>
+
+<!-- PostgreSQL application.properties -->
+<div class="card" id="pg-props">
+  <div class="ch pg-border"><span class="cbg">STEP 04</span><div class="ci"><h3>Update application.properties</h3><div class="fp">src/main/resources/<span>application.properties</span></div></div></div>
+  <div class="cb">
+    <p class="sb">Replace the entire contents of your <code>application.properties</code> file with the PostgreSQL configuration below. Notice the port is <strong>5432</strong> (PostgreSQL's default) instead of MySQL's 3306. The dialect also changes to tell Hibernate it is talking to PostgreSQL instead of MySQL.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">properties</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm"># PostgreSQL Connection</span>
+<span class="pr">spring.datasource.url</span>=<span class="st">jdbc:postgresql://localhost:5432/studentsdb</span>
+<span class="pr">spring.datasource.username</span>=<span class="st">springuser</span>
+<span class="pr">spring.datasource.password</span>=<span class="st">password123</span>
+<span class="pr">spring.datasource.driver-class-name</span>=<span class="st">org.postgresql.Driver</span>
+
+<span class="cm"># JPA / Hibernate</span>
+<span class="pr">spring.jpa.database-platform</span>=<span class="st">org.hibernate.dialect.PostgreSQLDialect</span>
+<span class="pr">spring.jpa.hibernate.ddl-auto</span>=<span class="st">update</span>
+<span class="pr">spring.jpa.show-sql</span>=<span class="st">true</span></code></pre></div>
+    <table class="tbl" style="margin-top:12px">
+      <thead><tr><th>Property</th><th>Value</th><th>What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>datasource.url</code></td><td><code>jdbc:postgresql://localhost:5432/studentsdb</code></td><td>Connects to PostgreSQL on port 5432, database named studentsdb</td></tr>
+        <tr><td><code>username</code></td><td><code>springuser</code></td><td>The PostgreSQL user you created in Step 02</td></tr>
+        <tr><td><code>password</code></td><td><code>password123</code></td><td>The password you set in Step 02</td></tr>
+        <tr><td><code>ddl-auto=update</code></td><td>update</td><td>Auto-creates and updates tables — data persists between restarts</td></tr>
+        <tr><td><code>show-sql=true</code></td><td>true</td><td>Prints SQL queries to the console so you can see what's happening</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- PostgreSQL Run -->
+<div class="card" id="pg-run">
+  <div class="ch pg-border"><span class="cbg">STEP 05</span><div class="ci"><h3>Run and Test with PostgreSQL</h3></div></div>
+  <div class="cb">
+    <p class="sb">Make sure PostgreSQL is running, then start your Spring Boot app the same way as always. Your data will now persist even after stopping and restarting the app.</p>
+    <div class="cw"><div class="cb2"><span class="cl2">bash — Terminal 1 (make sure PostgreSQL is running)</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Start PostgreSQL if not already running</span>
+sudo service postgresql start
+
+<span class="cm"># Run Spring Boot — same command as before</span>
+cd ~/students
+./mvnw spring-boot:run</code></pre></div>
+    <div class="note npg"><strong>What to look for:</strong> You should see <code>Tomcat started on port 8080</code> and no errors. If you see a connection refused error, PostgreSQL is not running — run <code>sudo service postgresql start</code> first.</div>
+    <div class="cw"><div class="cb2"><span class="cl2">bash — Terminal 2 (Angular stays the same)</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code>cd ~/student-app
+ng serve</code></pre></div>
+    <div class="cw"><div class="cb2"><span class="cl2">bash — Verify data persists in PostgreSQL</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+    <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Log into PostgreSQL and check your data</span>
+sudo -i -u postgres
+psql -d studentsdb -U springuser
+
+<span class="cm"># Inside psql shell:</span>
+<span class="an">SELECT</span> * <span class="an">FROM</span> student;
+\q
+exit</code></pre></div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- FILES THAT STAY THE SAME -->
+<div class="sec" id="no-changes">
+  <div class="sh"><span class="sn">04</span><h2>Files That <span class="a-sp">Stay Exactly the Same</span></h2></div>
+  <div class="sb">These files require <strong>zero changes</strong> regardless of which database you choose. This is the power of Spring Boot's abstraction — the database layer is completely decoupled from your business logic and UI.</div>
+
+  <div class="card">
+    <div class="ch neutral-border"><div class="ci"><h3>StudentController.java — No changes needed</h3></div></div>
+    <div class="cb">
+      <div class="cw"><div class="cb2"><span class="cl2">java</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code><span class="an">@RestController</span>
+<span class="an">@RequestMapping</span>(<span class="st">"/api/students"</span>)
+<span class="an">@CrossOrigin</span>(origins = <span class="st">"http://localhost:4200"</span>)
+<span class="kw">public class</span> <span class="cl">StudentController</span> {
+    <span class="kw">private final</span> <span class="cl">StudentRepository</span> repository;
+    <span class="kw">public</span> <span class="fn">StudentController</span>(<span class="cl">StudentRepository</span> repository) {
+        <span class="kw">this</span>.repository = repository;
+    }
+    <span class="an">@GetMapping</span>
+    <span class="kw">public</span> <span class="ty">List</span>&lt;<span class="cl">Student</span>&gt; <span class="fn">getAllStudents</span>() { <span class="kw">return</span> repository.<span class="fn">findAll</span>(); }
+    <span class="an">@PostMapping</span>
+    <span class="kw">public</span> <span class="cl">Student</span> <span class="fn">addStudent</span>(<span class="an">@RequestBody</span> <span class="cl">Student</span> student) { <span class="kw">return</span> repository.<span class="fn">save</span>(student); }
+}</code></pre></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch neutral-border"><div class="ci"><h3>student.service.ts — No changes needed</h3></div></div>
+    <div class="cb">
+      <div class="cw"><div class="cb2"><span class="cl2">typescript</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code><span class="an">@Injectable</span>({ providedIn: <span class="st">'root'</span> })
+<span class="kw">export class</span> <span class="cl">StudentService</span> {
+  <span class="kw">private</span> apiUrl = <span class="st">'http://localhost:8080/api/students'</span>;
+  <span class="kw">constructor</span>(<span class="kw">private</span> http: <span class="cl">HttpClient</span>) {}
+  <span class="fn">getAllStudents</span>(): <span class="cl">Observable</span>&lt;<span class="cl">Student</span>[]&gt; { <span class="kw">return this</span>.http.<span class="fn">get</span>&lt;<span class="cl">Student</span>[]&gt;(<span class="kw">this</span>.apiUrl); }
+  <span class="fn">addStudent</span>(student: <span class="cl">Student</span>): <span class="cl">Observable</span>&lt;<span class="cl">Student</span>&gt; { <span class="kw">return this</span>.http.<span class="fn">post</span>&lt;<span class="cl">Student</span>&gt;(<span class="kw">this</span>.apiUrl, student); }
+}</code></pre></div>
+    </div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- USEFUL COMMANDS -->
+<div class="sec" id="useful-cmds">
+  <div class="sh"><span class="sn">05</span><h2>Useful <span class="a-ap">Commands</span> — Daily Reference</h2></div>
+
+  <div class="diff-wrap">
+    <div class="diff-card">
+      <div class="diff-hdr my">🐬 MySQL Commands</div>
+      <div style="padding:14px 16px">
+        <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+        <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Start MySQL</span>
+sudo service mysql start
+
+<span class="cm"># Stop MySQL</span>
+sudo service mysql stop
+
+<span class="cm"># Check status</span>
+sudo service mysql status
+
+<span class="cm"># Log in as springuser</span>
+mysql -u springuser -p studentsdb
+
+<span class="cm"># Inside MySQL shell:</span>
+<span class="an">SHOW TABLES</span>;
+<span class="an">SELECT</span> * <span class="an">FROM</span> student;
+<span class="an">DESCRIBE</span> student;
+<span class="an">DELETE FROM</span> student;
+\q</code></pre></div>
+      </div>
+    </div>
+    <div class="diff-card">
+      <div class="diff-hdr pg">🐘 PostgreSQL Commands</div>
+      <div style="padding:14px 16px">
+        <div class="cw"><div class="cb2"><span class="cl2">bash</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+        <pre contenteditable="true" spellcheck="false"><code><span class="cm"># Start PostgreSQL</span>
+sudo service postgresql start
+
+<span class="cm"># Stop PostgreSQL</span>
+sudo service postgresql stop
+
+<span class="cm"># Check status</span>
+sudo service postgresql status
+
+<span class="cm"># Log in as springuser</span>
+psql -U springuser -d studentsdb
+
+<span class="cm"># Inside psql shell:</span>
+\dt
+<span class="an">SELECT</span> * <span class="an">FROM</span> student;
+\d student
+<span class="an">DELETE FROM</span> student;
+\q</code></pre></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="div"></div>
+
+<!-- TROUBLESHOOTING -->
+<div class="sec" id="troubleshoot">
+  <div class="sh"><span class="sn">06</span><h2><span class="a-ap">Troubleshooting</span> — Common Errors</h2></div>
+
+  <div class="card">
+    <div class="ch neutral-border"><div class="ci"><h3 style="color:var(--red)">Error: Communications link failure / Connection refused</h3></div></div>
+    <div class="cb">
+      <p class="sb"><strong>Cause:</strong> The database server is not running. This is the most common error.</p>
+      <div class="cw"><div class="cb2"><span class="cl2">fix</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code><span class="cm"># For MySQL:</span>
+sudo service mysql start
+
+<span class="cm"># For PostgreSQL:</span>
+sudo service postgresql start</code></pre></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch neutral-border"><div class="ci"><h3 style="color:var(--red)">Error: Access denied for user 'springuser'</h3></div></div>
+    <div class="cb">
+      <p class="sb"><strong>Cause:</strong> Wrong username or password in <code>application.properties</code>, or the user was not created correctly.</p>
+      <div class="cw"><div class="cb2"><span class="cl2">fix — MySQL</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code>sudo mysql
+<span class="an">ALTER USER</span> <span class="st">'springuser'</span>@<span class="st">'localhost'</span> <span class="an">IDENTIFIED BY</span> <span class="st">'password123'</span>;
+<span class="an">FLUSH PRIVILEGES</span>;
+<span class="an">EXIT</span>;</code></pre></div>
+      <div class="cw"><div class="cb2"><span class="cl2">fix — PostgreSQL</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code>sudo -i -u postgres
+psql
+<span class="an">ALTER USER</span> springuser <span class="an">WITH PASSWORD</span> <span class="st">'password123'</span>;
+\q
+exit</code></pre></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch neutral-border"><div class="ci"><h3 style="color:var(--red)">Error: Unknown database 'studentsdb'</h3></div></div>
+    <div class="cb">
+      <p class="sb"><strong>Cause:</strong> The database was not created yet, or the name in <code>application.properties</code> doesn't match.</p>
+      <div class="cw"><div class="cb2"><span class="cl2">fix — MySQL</span><span class="edit-badge">✎ editable</span><button class="cp" onclick="dc(this)"></button><button class="reset-btn" onclick="resetCode(this)" title="Reset to original"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button></div>
+      <pre contenteditable="true" spellcheck="false"><code>sudo mysql
+<span class="an">CREATE DATABASE</span> studentsdb;
+<span class="an">GRANT ALL PRIVILEGES ON</span> studentsdb.* <span class="an">TO</span> <span class="st">'springuser'</span>@<span class="st">'localhost'</span>;
+<span class="an">FLUSH PRIVILEGES</span>;
+<span class="an">EXIT</span>;</code></pre></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch neutral-border"><div class="ci"><h3 style="color:var(--red)">Error: Could not load driver class</h3></div></div>
+    <div class="cb">
+      <p class="sb"><strong>Cause:</strong> The database driver dependency is missing from <code>pom.xml</code> or the H2 dependency was not fully removed.</p>
+      <div class="note ny"><strong>Fix:</strong> Double check your <code>pom.xml</code> — make sure the H2 dependency is completely removed and the correct MySQL or PostgreSQL dependency has been added. Then stop and restart Spring Boot with <code>./mvnw spring-boot:run</code> to force a fresh download of dependencies.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="ch neutral-border"><div class="ci"><h3 style="color:var(--red)">Error: Table 'studentsdb.student' doesn't exist</h3></div></div>
+    <div class="cb">
+      <p class="sb"><strong>Cause:</strong> The <code>ddl-auto</code> property is missing or set incorrectly. With <code>update</code>, Spring Boot creates the table automatically on first startup.</p>
+      <div class="note ny"><strong>Fix:</strong> Make sure <code>spring.jpa.hibernate.ddl-auto=update</code> is in your <code>application.properties</code>. This tells Hibernate to create tables automatically from your entity classes. Restart Spring Boot after adding it.</div>
+    </div>
+  </div>
+</div>
+  </div>
+</div>
+<script>
+function switchGuide(n) {
+  document.querySelectorAll('.guide-page').forEach(p => p.classList.remove('visible'));
+  document.querySelectorAll('.nav-panel').forEach(p => p.classList.remove('visible'));
+  document.querySelectorAll('.gtab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page' + n).classList.add('visible');
+  document.getElementById('nav' + n).classList.add('visible');
+  document.getElementById('tab' + n).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+function goTo(e, pageId) {
+  e.preventDefault();
+  const id = e.currentTarget.getAttribute('href').replace('#', '');
+  const page = document.getElementById(pageId);
+  if (!page.classList.contains('visible')) {
+    const n = pageId.replace('page','');
+    switchGuide(parseInt(n));
+    setTimeout(() => {
+      const el = page.querySelector('#' + id);
+      if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+    }, 50);
+  } else {
+    const el = page.querySelector('#' + id);
+    if (el) el.scrollIntoView({behavior: 'smooth', block: 'start'});
+  }
+}
+
+// Active link tracking
+function setupObserver(pageId, navId, activeClass) {
+  const page = document.getElementById(pageId);
+  const links = document.querySelectorAll('#' + navId + ' .sb-a');
+  page.querySelectorAll('[id]').forEach(sec => {
+    new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          links.forEach(l => l.classList.remove('on', 'on-db'));
+          const a = document.querySelector('#' + navId + ' .sb-a[href="#' + e.target.id + '"]');
+          if (a) a.classList.add(activeClass);
+        }
+      });
+    }, {rootMargin: '-20% 0px -70% 0px'}).observe(sec);
+  });
+}
+setupObserver('page1', 'nav1', 'on');
+setupObserver('page2', 'nav2', 'on-db');
+
+// Copy button
+function dc(btn) {
+  const pre = btn.closest('.cw').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(() => {
+    btn.classList.add('ok');
+    btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>Copied!';
+    setTimeout(() => {
+      btn.classList.remove('ok');
+      btn.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>Copy';
+    }, 2000);
+  });
+}
+
+// Reset button
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('pre[contenteditable]').forEach(pre => {
+    pre.dataset.original = pre.innerHTML;
+  });
+});
+
+function resetCode(btn) {
+  const pre = btn.closest('.cw').querySelector('pre[contenteditable]');
+  if (pre && pre.dataset.original) {
+    pre.innerHTML = pre.dataset.original;
+    btn.style.color = '#4ade80';
+    setTimeout(() => btn.style.color = '', 1000);
+  }
+}
+</script>
+</body>
+</html>
