@@ -1,0 +1,153 @@
+#!/bin/bash
+
+# ============================================================
+# ArkCase Startup Script for VS Code
+# Replaces all IntelliJ Run Configuration steps
+# ============================================================
+
+TRAINING_DIR="$HOME/training"
+TOMCAT_DIR="$TRAINING_DIR/apache-tomcat-9.0.117"
+ARKCASE_DIR="$TRAINING_DIR/ArkCase"
+DOCKER_SERVICES_DIR="$TRAINING_DIR/ArkCase_Docker_Services_Training"
+ARKCASE_TRAINING_DIR="$TRAINING_DIR/ArkCase_Training"
+CERT_FILE="$DOCKER_SERVICES_DIR/cert/arkcase.ts"
+ENV_FILE="$DOCKER_SERVICES_DIR/env/.env-core"
+RUNTIME_SRC="$DOCKER_SERVICES_DIR/minio/arkcase-config/arkcase-runtime.yaml"
+RUNTIME_DEST="$ARKCASE_TRAINING_DIR/acm-standard-applications/war/arkcase/target/arkcase-25.09.01-SNAPSHOT/WEB-INF/classes/acm/acm-config-server-repo"
+WEBAPPS_DIR="$TOMCAT_DIR/webapps"
+WAR_SOURCE="$ARKCASE_TRAINING_DIR/acm-standard-applications/war/arkcase/target/arkcase-25.09.01-SNAPSHOT"
+
+echo ""
+echo "============================================================"
+echo " ArkCase Startup Script"
+echo "============================================================"
+echo ""
+
+# ------------------------------------------------------------
+# STEP 1 - Kill any existing Tomcat/Java processes
+# ------------------------------------------------------------
+echo "[1/9] Stopping any existing Tomcat or Java processes..."
+pkill -f catalina 2>/dev/null
+pkill -f tomcat 2>/dev/null
+pkill -f "arkcase" 2>/dev/null
+sleep 3
+echo "      Done."
+
+# ------------------------------------------------------------
+# STEP 2 - Verify required files exist
+# ------------------------------------------------------------
+echo "[2/9] Verifying required files and folders..."
+
+if [ ! -f "$CERT_FILE" ]; then
+  echo "      ERROR: Certificate not found at $CERT_FILE"
+  exit 1
+fi
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "      ERROR: ENV file not found at $ENV_FILE"
+  exit 1
+fi
+
+if [ ! -d "$TOMCAT_DIR" ]; then
+  echo "      ERROR: Tomcat not found at $TOMCAT_DIR"
+  exit 1
+fi
+
+echo "      All required files found."
+
+# ------------------------------------------------------------
+# STEP 3 - Create ~/.arkcase/custom folder
+# ------------------------------------------------------------
+echo "[3/9] Creating ~/.arkcase/custom folder..."
+mkdir -p ~/.arkcase/custom
+echo "      Done."
+
+# ------------------------------------------------------------
+# STEP 4 - Add acm-arkcase to /etc/hosts if not already there
+# ------------------------------------------------------------
+echo "[4/9] Checking /etc/hosts for acm-arkcase entry..."
+if grep -q "acm-arkcase" /etc/hosts; then
+  echo "      acm-arkcase already in /etc/hosts. Skipping."
+else
+  echo "      Adding acm-arkcase to /etc/hosts..."
+  echo "127.0.0.1   acm-arkcase" | sudo tee -a /etc/hosts > /dev/null
+  echo "      Done."
+fi
+
+# ------------------------------------------------------------
+# STEP 5 - Load ENV file variables
+# ------------------------------------------------------------
+echo "[5/9] Loading environment variables from .env-core..."
+set -a
+source "$ENV_FILE"
+set +a
+echo "      Done. ARKCASE_JDBC_PLATFORM=$ARKCASE_JDBC_PLATFORM"
+
+# ------------------------------------------------------------
+# STEP 6 - Set JAVA_OPTS (VM Options from IntelliJ config)
+# ------------------------------------------------------------
+echo "[6/9] Setting JAVA_OPTS..."
+export JAVA_OPTS="-Djava.net.preferIPv4Stack=true -Duser.timezone=GMT -Djavax.net.ssl.trustStorePassword=password -Djavax.net.ssl.trustStore=$CERT_FILE -Dspring.profiles.active=ldap,custom,local -Xms1024M"
+export JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+export JRE_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
+echo "      Done."
+
+# ------------------------------------------------------------
+# STEP 7 - Copy Runtime File (Before Launch step from IntelliJ)
+# ------------------------------------------------------------
+echo "[7/9] Copying arkcase-runtime.yaml..."
+if [ ! -f "$RUNTIME_SRC" ]; then
+  echo "      WARNING: Runtime source file not found at $RUNTIME_SRC"
+  echo "      Skipping runtime file copy."
+else
+  mkdir -p "$RUNTIME_DEST"
+  cp -f "$RUNTIME_SRC" "$RUNTIME_DEST"
+  echo "      Done. Copied to $RUNTIME_DEST"
+fi
+
+# ------------------------------------------------------------
+# STEP 8 - Deploy WAR to Tomcat webapps
+# (Equivalent of arkcase:war exploded with context /arkcase)
+# ------------------------------------------------------------
+echo "[8/9] Deploying ArkCase to Tomcat webapps..."
+
+if [ -d "$WEBAPPS_DIR/arkcase" ]; then
+  echo "      Removing old deployment..."
+  rm -rf "$WEBAPPS_DIR/arkcase"
+fi
+
+if [ -d "$WAR_SOURCE" ]; then
+  echo "      Copying exploded WAR to webapps/arkcase..."
+  cp -r "$WAR_SOURCE" "$WEBAPPS_DIR/arkcase"
+  echo "      Done."
+else
+  echo "      WARNING: Exploded WAR not found at $WAR_SOURCE"
+  echo "      Checking if already deployed..."
+  if [ ! -d "$WEBAPPS_DIR/arkcase" ]; then
+    echo "      ERROR: No WAR found to deploy. Please run Maven build first:"
+    echo "             cd $ARKCASE_DIR"
+    echo "             mvn clean package -DskipTests"
+    exit 1
+  else
+    echo "      Existing deployment found. Continuing..."
+  fi
+fi
+
+# ------------------------------------------------------------
+# STEP 9 - Start Tomcat
+# ------------------------------------------------------------
+echo "[9/9] Starting Tomcat on ports HTTP:8080 HTTPS:8843 JMX:1099..."
+echo ""
+echo "============================================================"
+echo " Tomcat is starting..."
+echo " Once you see 'Server startup in [xxxx] milliseconds'"
+echo " open your browser and go to:"
+echo " https://acm-arkcase:8843/arkcase"
+echo ""
+echo " Username: arkcase-admin@arkcase.org"
+echo " Password: arkcase"
+echo "============================================================"
+echo ""
+
+cd "$TOMCAT_DIR/bin"
+./catalina.sh run
