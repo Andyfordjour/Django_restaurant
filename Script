@@ -1,0 +1,16 @@
+# Split into 20MB chunks
+split -b 20M -d -a 3 large-file.tar.xz part_
+
+# Create folders with 5 files each
+mkdir -p split_archive
+counter=0
+folder_num=0
+for file in part_*; do
+  if [ $counter -eq 5 ]; then
+    folder_num=$((folder_num + 1))
+    counter=0
+  fi
+  mkdir -p "split_archive/folder_$(printf '%03d' $folder_num)"
+  mv "$file" "split_archive/folder_$(printf '%03d' $folder_num)/"
+  counter=$((counter + 1))
+done
