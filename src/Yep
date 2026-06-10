@@ -1,0 +1,72 @@
+# ============================================================
+# STEP 3 - Check Docker is running
+# ============================================================
+echo ""
+echo -e "${BLUE}[3/8] Checking Docker and required services...${NC}"
+
+if ! docker info > /dev/null 2>&1; then
+  error "Docker is not running!"
+  info "Start Docker with: sudo service docker start"
+  info "ArkCase depends on Docker for MariaDB, ActiveMQ, Minio, Solr and Samba."
+  exit 1
+fi
+success "Docker is running."
+
+# Define required containers and their expected ports
+declare -A CONTAINER_PORTS
+CONTAINER_PORTS["mariadb"]="3306"
+CONTAINER_PORTS["minio"]="9000"
+CONTAINER_PORTS["solr-standalone"]="8983"
+CONTAINER_PORTS["activemq"]="61616"
+CONTAINER_PORTS["samba"]="389"
+
+echo ""
+info "Checking required containers..."
+echo ""
+
+ALL_CONTAINERS_UP=true
+
+for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
+  PORT=${CONTAINER_PORTS[$CONTAINER]}
+
+  # Check if container is running
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+
+    # Get container status
+    STATUS=$(docker ps --format '{{.Names}}\t{{.Status}}' | grep "^${CONTAINER}" | awk '{print $2, $3, $4}')
+
+    # Get actual ports running
+    PORTS=$(docker ps --format '{{.Names}}\t{{.Ports}}' | grep "^${CONTAINER}" | cut -f2)
+
+    success "Container '$CONTAINER' is running."
+    info "  Status : $STATUS"
+    info "  Ports  : $PORTS"
+
+    # Check if expected port is actually mapped
+    if echo "$PORTS" | grep -q "$PORT"; then
+      success "  Expected port $PORT is active."
+    else
+      warning "  Expected port $PORT not found in port mappings!"
+      info "  Full port list: $PORTS"
+    fi
+
+  else
+    error "Container '$CONTAINER' is NOT running!"
+    info "  Expected port : $PORT"
+    info "  Fix: cd $DOCKER_SERVICES_DIR && docker-compose up -d"
+    ALL_CONTAINERS_UP=false
+  fi
+
+  echo ""
+done
+
+# Stop script if any container is down
+if [ "$ALL_CONTAINERS_UP" = false ]; then
+  error "One or more required Docker containers are not running!"
+  info "Start all containers with:"
+  info "cd $DOCKER_SERVICES_DIR && docker-compose up -d"
+  info "Then wait 30 seconds and re-run this script."
+  exit 1
+fi
+
+success "All required Docker containers are running."
