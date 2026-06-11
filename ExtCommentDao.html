@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ExtCommentDao – ext-comment Javadoc</title>
+<style>
+:root {
+  --blue:    #2563eb;
+  --navy:    #1e3a5f;
+  --light:   #f0f6ff;
+  --border:  #dbeafe;
+  --text:    #1f2937;
+  --muted:   #6b7280;
+  --code-bg: #f8faff;
+  --green:   #166534;
+  --green-bg:#dcfce7;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       color: var(--text); background: #fff; display: flex; min-height: 100vh; }
+
+/* Sidebar */
+#sidebar { width: 270px; min-width: 270px; background: var(--navy);
+           color: #e2e8f0; padding: 0; position: sticky; top: 0;
+           height: 100vh; overflow-y: auto; flex-shrink: 0; }
+#sidebar .logo { padding: 20px 18px 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
+#sidebar .logo h2 { font-size: 1rem; font-weight: 700; color: #fff; }
+#sidebar .logo p  { font-size: .75rem; color: #94a3b8; margin-top: 2px; }
+#sidebar section { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+#sidebar section h3 { font-size: .65rem; font-weight: 700; text-transform: uppercase;
+                       letter-spacing: .08em; color: #64748b;
+                       padding: 0 18px 6px; }
+#sidebar a { display: block; padding: 5px 18px; font-size: .82rem; color: #cbd5e1;
+             text-decoration: none; transition: background .15s, color .15s; }
+#sidebar a:hover, #sidebar a.active { background: rgba(255,255,255,.1); color: #fff; }
+#sidebar a .pkg { font-size: .68rem; color: #64748b; display: block; }
+
+/* Main */
+#main { flex: 1; padding: 40px 48px; max-width: 960px; }
+#main h1.page-title { font-size: 1.6rem; font-weight: 700; color: var(--navy);
+                       border-bottom: 2px solid var(--border); padding-bottom: 12px;
+                       margin-bottom: 6px; }
+.pkg-label { font-size: .8rem; color: var(--muted); margin-bottom: 24px; display: block; }
+.class-desc { background: var(--light); border-left: 4px solid var(--blue);
+               padding: 14px 18px; border-radius: 0 6px 6px 0;
+               font-size: .92rem; line-height: 1.65; margin-bottom: 28px; }
+
+/* Summary table */
+.summary-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; font-size: .88rem; }
+.summary-table caption { text-align: left; font-weight: 700; font-size: .95rem;
+                          color: var(--navy); padding: 10px 0 8px; }
+.summary-table th { background: var(--navy); color: #fff; padding: 8px 14px;
+                     text-align: left; font-weight: 600; }
+.summary-table td { padding: 8px 14px; border-bottom: 1px solid var(--border);
+                     vertical-align: top; }
+.summary-table tr:hover td { background: var(--light); }
+.summary-table td:first-child { font-family: 'Courier New', monospace; font-size: .82rem;
+                                  color: var(--blue); white-space: nowrap; }
+
+/* Detail sections */
+.detail-section { margin-bottom: 36px; }
+.detail-section h2 { font-size: 1.05rem; font-weight: 700; color: var(--navy);
+                       border-bottom: 2px solid var(--border); padding-bottom: 6px;
+                       margin-bottom: 16px; }
+.member { border: 1px solid var(--border); border-radius: 8px;
+           margin-bottom: 16px; overflow: hidden; }
+.member-header { background: var(--light); padding: 12px 16px;
+                  border-bottom: 1px solid var(--border); }
+.member-header .sig { font-family: 'Courier New', monospace; font-size: .88rem;
+                        color: var(--navy); font-weight: 700; }
+.member-header .sig .kw  { color: var(--blue); }
+.member-header .sig .ret { color: #7c3aed; }
+.member-body { padding: 14px 16px; font-size: .88rem; line-height: 1.65; }
+.member-body p { margin-bottom: 8px; }
+.param-table { width: 100%; font-size: .84rem; margin-top: 10px;
+                border-collapse: collapse; }
+.param-table th { text-align: left; color: var(--muted); font-weight: 600;
+                   padding: 4px 10px; border-bottom: 1px solid var(--border); }
+.param-table td { padding: 5px 10px; vertical-align: top; }
+.param-table td:first-child { font-family: 'Courier New', monospace;
+                                color: var(--blue); white-space: nowrap; }
+.tag-returns { margin-top: 10px; padding: 6px 12px; background: var(--green-bg);
+                border-radius: 4px; font-size: .84rem; color: var(--green); }
+.tag-throws  { margin-top: 6px; font-size: .84rem; color: #991b1b; }
+
+code { font-family: 'Courier New', monospace; background: var(--code-bg);
+        padding: 1px 5px; border-radius: 3px; font-size: .85em; color: #7c3aed; }
+
+/* Index page */
+.index-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+.index-card { border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px;
+               text-decoration: none; color: inherit; transition: box-shadow .2s, border-color .2s; }
+.index-card:hover { box-shadow: 0 4px 16px rgba(37,99,235,.12); border-color: var(--blue); }
+.index-card h3 { font-family: 'Courier New', monospace; font-size: .95rem;
+                  color: var(--blue); margin-bottom: 4px; }
+.index-card .kind { display: inline-block; font-size: .68rem; font-weight: 700;
+                     text-transform: uppercase; letter-spacing: .06em;
+                     padding: 2px 7px; border-radius: 10px; margin-bottom: 6px; }
+.kind-interface { background: #dbeafe; color: #1e40af; }
+.kind-class     { background: #ede9fe; color: #5b21b6; }
+.index-card p   { font-size: .82rem; color: var(--muted); line-height: 1.5; }
+.index-card .pkg { font-size: .72rem; color: #9ca3af; margin-top: 8px; }
+
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border);
+          font-size: .78rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<div id="sidebar">
+  <div class="logo">
+    <h2>ext-comment Plugin</h2>
+    <p>Javadoc Reference</p>
+  </div>
+  <section><h3>Overview</h3><a href="index.html">All Classes</a></section>
+  <section><h3>dao</h3><a href="ExtCommentDao.html" class="active">ExtCommentDao<span class="pkg">ext.training.acm.plugins.comment.dao</span></a></section><section><h3>model</h3><a href="ExtComment.html" class="">ExtComment<span class="pkg">ext.training.acm.plugins.comment.model</span></a><a href="ExtCommentConfig.html" class="">ExtCommentConfig<span class="pkg">ext.training.acm.plugins.comment.model</span></a><a href="ExtCommentConstants.html" class="">ExtCommentConstants<span class="pkg">ext.training.acm.plugins.comment.model</span></a><a href="ExtCommentEvent.html" class="">ExtCommentEvent<span class="pkg">ext.training.acm.plugins.comment.model</span></a></section><section><h3>service</h3><a href="ExtCommentServiceImpl.html" class="">ExtCommentServiceImpl<span class="pkg">ext.training.acm.plugins.comment.service</span></a><a href="ExtCommentToSolrTransformer.html" class="">ExtCommentToSolrTransformer<span class="pkg">ext.training.acm.plugins.comment.service</span></a><a href="that.html" class="">that<span class="pkg">ext.training.acm.plugins.comment.service</span></a></section><section><h3>api</h3><a href="ExtCommentAPIController.html" class="">ExtCommentAPIController<span class="pkg">ext.training.acm.plugins.comment.web.api</span></a></section>
+</div>
+<div id="main">
+<h1 class="page-title">ExtCommentDao</h1>
+<span class="pkg">ext.training.acm.plugins.comment.dao</span>
+<span class="kind kind-class">Class</span>
+<div class="class-desc">Handles all database operations for comments. Provides the ability to save, find, and delete comments from the database.</div>
+<table class="summary-table">
+  <caption>Method Summary</caption>
+  <tr><th>Signature</th><th>Description</th></tr>
+  <tr><td>void&nbsp;deleteById(Long id)</td><td>Handles all database operations for comments. Provides the ability to save, find, and delete comments from the database. / public class ExtCommentDao {  /** Permanently deletes a comment from the database by its ID.</td></tr><tr><td>Class<ExtComment>&nbsp;getPersistenceClass()</td><td>Tells the system which Java class this DAO is responsible for.</td></tr><tr><td>String&nbsp;getSupportedObjectType()</td><td>Tells the system which object type this DAO handles.</td></tr>
+</table><div class="detail-section"><h2>Method Detail</h2><div class="member">
+  <div class="member-header"><div class="sig"><span class="kw">public</span> <span class="ret">void</span> <b>deleteById</b>(Long id)</div></div>
+  <div class="member-body"><p>Handles all database operations for comments. Provides the ability to save, find, and delete comments from the database. / public class ExtCommentDao {  /** Permanently deletes a comment from the database by its ID.</p><table class="param-table">
+  <tr><th>Parameter</th><th>Description</th></tr>
+  <tr><td>id</td><td>the ID of the comment to delete; cannot be null</td></tr>
+</table><div class="tag-throws"><b>Throws</b> <code>NullPointerException</code>: if the ID is null</div></div>
+</div><div class="member">
+  <div class="member-header"><div class="sig"><span class="kw">public</span> <span class="ret">Class<ExtComment></span> <b>getPersistenceClass</b>()</div></div>
+  <div class="member-body"><p>Tells the system which Java class this DAO is responsible for.</p><div class="tag-returns"><b>Returns:</b> the ExtComment class</div></div>
+</div><div class="member">
+  <div class="member-header"><div class="sig"><span class="kw">public</span> <span class="ret">String</span> <b>getSupportedObjectType</b>()</div></div>
+  <div class="member-body"><p>Tells the system which object type this DAO handles.</p><div class="tag-returns"><b>Returns:</b> "COMMENT"</div></div>
+</div></div><footer>ext-comment Plugin Javadoc &nbsp;·&nbsp; Generated by Claude</footer></div>
+</body>
+</html>
