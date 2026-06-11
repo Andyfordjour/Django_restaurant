@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ext-comment Plugin – Javadoc</title>
+<style>
+:root {
+  --blue:    #2563eb;
+  --navy:    #1e3a5f;
+  --light:   #f0f6ff;
+  --border:  #dbeafe;
+  --text:    #1f2937;
+  --muted:   #6b7280;
+  --code-bg: #f8faff;
+  --green:   #166534;
+  --green-bg:#dcfce7;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+       color: var(--text); background: #fff; display: flex; min-height: 100vh; }
+
+/* Sidebar */
+#sidebar { width: 260px; min-width: 260px; background: var(--navy);
+           color: #e2e8f0; position: sticky; top: 0;
+           height: 100vh; overflow-y: auto; flex-shrink: 0; }
+#sidebar .logo { padding: 20px 18px 16px; border-bottom: 1px solid rgba(255,255,255,.1); }
+#sidebar .logo h2 { font-size: 1rem; font-weight: 700; color: #fff; }
+#sidebar .logo p  { font-size: .75rem; color: #94a3b8; margin-top: 2px; }
+#sidebar section { padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,.07); }
+#sidebar section h3 { font-size: .65rem; font-weight: 700; text-transform: uppercase;
+                       letter-spacing: .08em; color: #64748b; padding: 0 18px 6px; }
+#sidebar a { display: block; padding: 6px 18px; font-size: .82rem; color: #cbd5e1;
+             text-decoration: none; cursor: pointer; transition: background .15s, color .15s; }
+#sidebar a:hover { background: rgba(255,255,255,.08); color: #fff; }
+#sidebar a.active { background: rgba(255,255,255,.15); color: #fff; font-weight: 600; }
+#sidebar a .pkg { font-size: .68rem; color: #64748b; display: block; }
+
+/* Main content area */
+#main { flex: 1; padding: 40px 48px; overflow-y: auto; }
+
+/* Pages — hidden by default, shown when active */
+.page { display: none; max-width: 900px; }
+.page.active { display: block; }
+
+h1.page-title { font-size: 1.6rem; font-weight: 700; color: var(--navy);
+                border-bottom: 2px solid var(--border); padding-bottom: 12px;
+                margin-bottom: 6px; }
+.pkg-label { font-size: .8rem; color: var(--muted); margin-bottom: 16px; display: block; }
+.kind-badge { display: inline-block; font-size: .68rem; font-weight: 700;
+              text-transform: uppercase; letter-spacing: .06em;
+              padding: 2px 8px; border-radius: 10px; margin-bottom: 18px; }
+.kind-interface { background: #dbeafe; color: #1e40af; }
+.kind-class     { background: #ede9fe; color: #5b21b6; }
+
+.class-desc { background: var(--light); border-left: 4px solid var(--blue);
+              padding: 14px 18px; border-radius: 0 6px 6px 0;
+              font-size: .92rem; line-height: 1.7; margin-bottom: 28px; }
+
+/* Summary tables */
+.summary-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; font-size: .88rem; }
+.summary-table caption { text-align: left; font-weight: 700; font-size: 1rem;
+                          color: var(--navy); padding: 10px 0 8px; }
+.summary-table th { background: var(--navy); color: #fff; padding: 9px 14px;
+                     text-align: left; font-weight: 600; }
+.summary-table td { padding: 8px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.summary-table tr:hover td { background: var(--light); }
+.summary-table td:first-child { font-family: 'Courier New', monospace; font-size: .82rem;
+                                  color: var(--blue); white-space: nowrap; }
+
+/* Member detail cards */
+.detail-section { margin-bottom: 36px; }
+.detail-section h2 { font-size: 1.05rem; font-weight: 700; color: var(--navy);
+                      border-bottom: 2px solid var(--border); padding-bottom: 6px;
+                      margin-bottom: 16px; }
+.member { border: 1px solid var(--border); border-radius: 8px; margin-bottom: 14px; overflow: hidden; }
+.member-header { background: var(--light); padding: 11px 16px; border-bottom: 1px solid var(--border); }
+.member-sig { font-family: 'Courier New', monospace; font-size: .88rem; color: var(--navy); font-weight: 700; }
+.member-sig .kw  { color: var(--blue); }
+.member-sig .ret { color: #7c3aed; }
+.member-body { padding: 13px 16px; font-size: .88rem; line-height: 1.65; }
+.member-body p { margin-bottom: 8px; }
+
+.param-table { width: 100%; font-size: .84rem; margin-top: 10px; border-collapse: collapse; }
+.param-table th { text-align: left; color: var(--muted); font-weight: 600;
+                   padding: 4px 10px; border-bottom: 1px solid var(--border); }
+.param-table td { padding: 5px 10px; vertical-align: top; }
+.param-table td:first-child { font-family: 'Courier New', monospace; color: var(--blue); white-space: nowrap; }
+.tag-returns { margin-top: 10px; padding: 6px 12px; background: var(--green-bg);
+               border-radius: 4px; font-size: .84rem; color: var(--green); }
+.tag-throws  { margin-top: 6px; font-size: .84rem; color: #991b1b; }
+code { font-family: 'Courier New', monospace; background: var(--code-bg);
+       padding: 1px 5px; border-radius: 3px; font-size: .85em; color: #7c3aed; }
+
+/* Index page grid */
+.index-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
+.index-card { border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px;
+              cursor: pointer; transition: box-shadow .2s, border-color .2s; }
+.index-card:hover { box-shadow: 0 4px 16px rgba(37,99,235,.12); border-color: var(--blue); }
+.index-card h3 { font-family: 'Courier New', monospace; font-size: .95rem;
+                  color: var(--blue); margin-bottom: 6px; }
+.index-card p   { font-size: .82rem; color: var(--muted); line-height: 1.5; }
+.index-card .pkg { font-size: .72rem; color: #9ca3af; margin-top: 8px; }
+
+footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--border);
+         font-size: .78rem; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ SIDEBAR -->
+<div id="sidebar">
+  <div class="logo">
+    <h2>ext-comment Plugin</h2>
+    <p>Javadoc Reference</p>
+  </div>
+
+  <section>
+    <h3>Overview</h3>
+    <a onclick="show('index')" class="active">All Classes</a>
+  </section>
+
+  <section>
+    <h3>model</h3>
+    <a onclick="show('ExtComment')">ExtComment<span class="pkg">plugins.comment.model</span></a>
+    <a onclick="show('ExtCommentConfig')">ExtCommentConfig<span class="pkg">plugins.comment.model</span></a>
+    <a onclick="show('ExtCommentConstants')">ExtCommentConstants<span class="pkg">plugins.comment.model</span></a>
+    <a onclick="show('ExtCommentEvent')">ExtCommentEvent<span class="pkg">plugins.comment.model</span></a>
+  </section>
+
+  <section>
+    <h3>dao</h3>
+    <a onclick="show('ExtCommentDao')">ExtCommentDao<span class="pkg">plugins.comment.dao</span></a>
+  </section>
+
+  <section>
+    <h3>service</h3>
+    <a onclick="show('ExtCommentService')">ExtCommentService<span class="pkg">plugins.comment.service</span></a>
+    <a onclick="show('ExtCommentServiceImpl')">ExtCommentServiceImpl<span class="pkg">plugins.comment.service</span></a>
+    <a onclick="show('ExtCommentToSolrTransformer')">ExtCommentToSolrTransformer<span class="pkg">plugins.comment.service</span></a>
+  </section>
+
+  <section>
+    <h3>web.api</h3>
+    <a onclick="show('ExtCommentAPIController')">ExtCommentAPIController<span class="pkg">plugins.comment.web.api</span></a>
+  </section>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN -->
+<div id="main">
+
+  <!-- ─── INDEX PAGE ─────────────────────────────────── -->
+  <div id="page-index" class="page active">
+    <h1 class="page-title">ext-comment Plugin – All Classes</h1>
+    <p style="color:var(--muted);font-size:.9rem;margin:8px 0 4px;">
+      8 classes &amp; interfaces · 4 packages
+    </p>
+    <div class="index-grid">
+
+      <div class="index-card" onclick="show('ExtComment')">
+        <span class="kind-badge kind-class">Class</span>
+        <h3>ExtComment</h3>
+        <p>Represents a comment in the system. Can be attached to any ArkCase object such as a Complaint or Case File.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.model</div>
+      </div>
+
+      <div class="index-card" onclick="show('ExtCommentConfig')">
+        <span class="kind-badge kind-class">Class</span>
+        <h3>ExtCommentConfig</h3>
+        <p>Holds configuration settings for the comment plugin, loaded from the application's properties file.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.model</div>
+      </div>
+
+      <div class="index-card" onclick="show('ExtCommentConstants')">
+        <span class="kind-badge kind-interface">Interface</span>
+        <h3>ExtCommentConstants</h3>
+        <p>Holds constant values used throughout the comment plugin, including object type and event type names.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.model</div>
+      </div>
+
+      <div class="index-card" onclick="show('ExtCommentEvent')">
+        <span class="kind-badge kind-class">Class</span>
+        <h3>ExtCommentEvent</h3>
+        <p>Represents an event fired when a comment is created, updated, or deleted.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.model</div>
+      </div>
+
+      <div class="index-card" onclick="show('ExtCommentDao')">
+        <span class="kind-badge kind-class">Class</span>
+        <h3>ExtCommentDao</h3>
+        <p>Handles all database operations for comments — saving, finding, and deleting.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.dao</div>
+      </div>
+
+      <div class="index-card" onclick="show('ExtCommentService')">
+        <span class="kind-badge kind-interface">Interface</span>
+        <h3>ExtCommentService</h3>
+        <p>Defines the available actions that can be performed on a comment.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.service</div>
+      </div>
+
+      <div class="index-card" onclick="show('ExtCommentServiceImpl')">
+        <span class="kind-badge kind-class">Class</span>
+        <h3>ExtCommentServiceImpl</h3>
+        <p>The main implementation of ExtCommentService. Passes comment operations to the database layer.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.service</div>
+      </div>
+
+      <div class="index-card" onclick="show('ExtCommentToSolrTransformer')">
+        <span class="kind-badge kind-class">Class</span>
+        <h3>ExtCommentToSolrTransformer</h3>
+        <p>Converts comments into a format that can be saved in the Solr search index.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.service</div>
+      </div>
+
+      <div class="index-card" onclick="show('ExtCommentAPIController')">
+        <span class="kind-badge kind-class">Class</span>
+        <h3>ExtCommentAPIController</h3>
+        <p>Handles incoming HTTP requests for comment operations — get, save, and delete.</p>
+        <div class="pkg">ext.training.acm.plugins.comment.web.api</div>
+      </div>
+
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtCommentConstants ────────────────────────── -->
+  <div id="page-ExtCommentConstants" class="page">
+    <h1 class="page-title">ExtCommentConstants</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.model</span>
+    <span class="kind-badge kind-interface">Interface</span>
+    <div class="class-desc">Holds constant values used throughout the comment plugin.</div>
+
+    <table class="summary-table">
+      <caption>Field Summary</caption>
+      <tr><th>Name</th><th>Description</th></tr>
+      <tr><td>OBJECT_TYPE</td><td>The object type name for a comment. Value: "COMMENT"</td></tr>
+      <tr><td>EVENT_TYPE_BASE</td><td>The base string used to build event type names for comments.</td></tr>
+      <tr><td>EVENT_TYPE_CREATE</td><td>Event type used when a comment is created. Value: "create"</td></tr>
+      <tr><td>EVENT_TYPE_UPDATE</td><td>Event type used when a comment is updated. Value: "update"</td></tr>
+      <tr><td>EVENT_TYPE_DELETE</td><td>Event type used when a comment is deleted. Value: "delete"</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Field Detail</h2>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">String</span> OBJECT_TYPE</div></div>
+        <div class="member-body"><p>The object type name for a comment. Used throughout the system to identify comment records.</p><div class="tag-returns"><b>Value:</b> "COMMENT"</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">String</span> EVENT_TYPE_BASE</div></div>
+        <div class="member-body"><p>The base string used to build event type names for comments. Combine with a lifecycle suffix and a dot to form a full event name, e.g. <code>ext.training.acm.plugins.comment.event.create</code></p></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">String</span> EVENT_TYPE_CREATE</div></div>
+        <div class="member-body"><p>Event type used when a comment is created.</p><div class="tag-returns"><b>Value:</b> "create"</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">String</span> EVENT_TYPE_UPDATE</div></div>
+        <div class="member-body"><p>Event type used when a comment is updated.</p><div class="tag-returns"><b>Value:</b> "update"</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">String</span> EVENT_TYPE_DELETE</div></div>
+        <div class="member-body"><p>Event type used when a comment is deleted.</p><div class="tag-returns"><b>Value:</b> "delete"</div></div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtComment ─────────────────────────────────── -->
+  <div id="page-ExtComment" class="page">
+    <h1 class="page-title">ExtComment</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.model</span>
+    <span class="kind-badge kind-class">Class</span>
+    <div class="class-desc">Represents a comment in the system. A comment can be attached to any ArkCase object such as a Complaint or Case File. This data is saved in the <code>ext_comment</code> database table.</div>
+
+    <table class="summary-table">
+      <caption>Field Summary</caption>
+      <tr><th>Name</th><th>Description</th></tr>
+      <tr><td>id</td><td>The unique ID of this comment.</td></tr>
+      <tr><td>details</td><td>The text content of the comment.</td></tr>
+      <tr><td>objectType</td><td>The type of this object. Always set to "COMMENT".</td></tr>
+      <tr><td>parentId</td><td>The ID of the parent object this comment belongs to.</td></tr>
+      <tr><td>parentType</td><td>The type of the parent object (e.g., "COMPLAINT").</td></tr>
+      <tr><td>parentTitle</td><td>The title of the parent object at the time this comment was created.</td></tr>
+      <tr><td>status</td><td>The current status of the comment. Defaults to "ACTIVE" on save.</td></tr>
+      <tr><td>participants</td><td>The list of participants who have access to this comment.</td></tr>
+      <tr><td>restricted</td><td>Whether this comment is restricted to certain users. Defaults to false.</td></tr>
+      <tr><td>creator</td><td>The username of the person who created this comment.</td></tr>
+      <tr><td>created</td><td>The date and time this comment was created.</td></tr>
+      <tr><td>modifier</td><td>The username of the person who last changed this comment.</td></tr>
+      <tr><td>modified</td><td>The date and time this comment was last changed.</td></tr>
+    </table>
+
+    <table class="summary-table">
+      <caption>Method Summary</caption>
+      <tr><th>Method</th><th>Description</th></tr>
+      <tr><td>beforeInsert()</td><td>Runs automatically before this comment is saved for the first time.</td></tr>
+      <tr><td>setupChildPointers()</td><td>Links each participant back to this comment.</td></tr>
+      <tr><td>beforeUpdate()</td><td>Runs automatically before this comment is updated in the database.</td></tr>
+      <tr><td>getId()</td><td>Returns the unique ID of this comment.</td></tr>
+      <tr><td>getDetails()</td><td>Returns the text content of this comment.</td></tr>
+      <tr><td>getObjectType()</td><td>Returns the object type. Always "COMMENT".</td></tr>
+      <tr><td>getParentId()</td><td>Returns the ID of the parent object.</td></tr>
+      <tr><td>getParentType()</td><td>Returns the type of the parent object.</td></tr>
+      <tr><td>getParentTitle()</td><td>Returns the title of the parent object.</td></tr>
+      <tr><td>getStatus()</td><td>Returns the status of this comment.</td></tr>
+      <tr><td>getRestricted()</td><td>Returns whether this comment is restricted.</td></tr>
+      <tr><td>getCreator()</td><td>Returns the username of the creator.</td></tr>
+      <tr><td>getCreated()</td><td>Returns the date this comment was created.</td></tr>
+      <tr><td>getModifier()</td><td>Returns the username of the last modifier.</td></tr>
+      <tr><td>getModified()</td><td>Returns the date this comment was last modified.</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Method Detail</h2>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">protected void</span> beforeInsert()</div></div>
+        <div class="member-body"><p>Runs automatically before this comment is saved for the first time. Sets the status to "ACTIVE" if no status has been provided.</p></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">private void</span> setupChildPointers()</div></div>
+        <div class="member-body"><p>Links each participant back to this comment so the system knows which comment they belong to.</p></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">protected void</span> beforeUpdate()</div></div>
+        <div class="member-body"><p>Runs automatically before this comment is updated in the database. Re-links participants to this comment in case any were added.</p></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">Long</span> getId()</div></div>
+        <div class="member-body"><p>Returns the unique ID of this comment.</p><div class="tag-returns"><b>Returns:</b> the comment ID</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">String</span> getDetails()</div></div>
+        <div class="member-body"><p>Returns the text content of this comment.</p><div class="tag-returns"><b>Returns:</b> the comment text</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">Long</span> getParentId()</div></div>
+        <div class="member-body"><p>Returns the ID of the parent object this comment is attached to.</p><div class="tag-returns"><b>Returns:</b> the parent object ID</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">String</span> getParentType()</div></div>
+        <div class="member-body"><p>Returns the type of the parent object (e.g., "COMPLAINT" or "CASE_FILE").</p><div class="tag-returns"><b>Returns:</b> the parent object type</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">String</span> getStatus()</div></div>
+        <div class="member-body"><p>Returns the status of this comment (e.g., "ACTIVE").</p><div class="tag-returns"><b>Returns:</b> the status</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">Boolean</span> getRestricted()</div></div>
+        <div class="member-body"><p>Returns whether this comment is restricted to certain users.</p><div class="tag-returns"><b>Returns:</b> true if restricted, false otherwise</div></div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtCommentConfig ───────────────────────────── -->
+  <div id="page-ExtCommentConfig" class="page">
+    <h1 class="page-title">ExtCommentConfig</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.model</span>
+    <span class="kind-badge kind-class">Class</span>
+    <div class="class-desc">Holds configuration settings for the comment plugin. These settings are loaded from the application's properties file and control how comments appear in search results.</div>
+
+    <table class="summary-table">
+      <caption>Field Summary</caption>
+      <tr><th>Name</th><th>Description</th></tr>
+      <tr><td>searchTreeFilter</td><td>The filter used when searching for comments (e.g., only show active ones).</td></tr>
+      <tr><td>searchTreeSort</td><td>The sort order used when displaying comments in search results.</td></tr>
+      <tr><td>searchTreeSearchQuery</td><td>The search query used to find comments in the search tree.</td></tr>
+    </table>
+
+    <table class="summary-table">
+      <caption>Method Summary</caption>
+      <tr><th>Method</th><th>Description</th></tr>
+      <tr><td>getSearchTreeFilter()</td><td>Returns the search filter for comments.</td></tr>
+      <tr><td>setSearchTreeFilter(String)</td><td>Sets the search filter for comments.</td></tr>
+      <tr><td>getSearchTreeSort()</td><td>Returns the sort order for comment search results.</td></tr>
+      <tr><td>setSearchTreeSort(String)</td><td>Sets the sort order for comment search results.</td></tr>
+      <tr><td>getSearchTreeQuery()</td><td>Returns the search query used to look up comments.</td></tr>
+      <tr><td>setSearchTreeQuery(String)</td><td>Sets the search query used to look up comments.</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Method Detail</h2>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">String</span> getSearchTreeFilter()</div></div>
+        <div class="member-body"><p>Returns the search filter for comments.</p><div class="tag-returns"><b>Returns:</b> the search filter</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">void</span> setSearchTreeFilter(<span class="ret">String</span> searchTreeFilter)</div></div>
+        <div class="member-body"><p>Sets the search filter for comments.</p>
+          <table class="param-table"><tr><th>Parameter</th><th>Description</th></tr><tr><td>searchTreeFilter</td><td>the search filter</td></tr></table>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">String</span> getSearchTreeSort()</div></div>
+        <div class="member-body"><p>Returns the sort order for comment search results.</p><div class="tag-returns"><b>Returns:</b> the sort order</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">String</span> getSearchTreeQuery()</div></div>
+        <div class="member-body"><p>Returns the search query used to look up comments.</p><div class="tag-returns"><b>Returns:</b> the search query</div></div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtCommentEvent ────────────────────────────── -->
+  <div id="page-ExtCommentEvent" class="page">
+    <h1 class="page-title">ExtCommentEvent</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.model</span>
+    <span class="kind-badge kind-class">Class</span>
+    <div class="class-desc">Represents an event that is fired when a comment is created, updated, or deleted. Other parts of the system can listen for this event to react — for example, writing to an audit log or updating the search index.</div>
+
+    <table class="summary-table">
+      <caption>Constructor Summary</caption>
+      <tr><th>Constructor</th><th>Description</th></tr>
+      <tr><td>ExtCommentEvent(ExtComment, String, boolean, String)</td><td>Creates a new comment event with all the information about what happened.</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Constructor Detail</h2>
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">public</span> ExtCommentEvent(<span class="ret">ExtComment</span> extComment, <span class="ret">String</span> eventType, <span class="ret">boolean</span> succeeded, <span class="ret">String</span> ipAddress)</div></div>
+        <div class="member-body">
+          <p>Creates a new comment event with all the information about what happened.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>extComment</td><td>the comment that was created, updated, or deleted</td></tr>
+            <tr><td>eventType</td><td>what happened — "create", "update", or "delete"</td></tr>
+            <tr><td>succeeded</td><td>true if the operation was successful, false if it failed</td></tr>
+            <tr><td>ipAddress</td><td>the IP address of the user who triggered the action</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtCommentDao ──────────────────────────────── -->
+  <div id="page-ExtCommentDao" class="page">
+    <h1 class="page-title">ExtCommentDao</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.dao</span>
+    <span class="kind-badge kind-class">Class</span>
+    <div class="class-desc">Handles all database operations for comments. Provides the ability to save, find, and delete comments from the database. Extends AcmAbstractDao which provides standard save and find operations out of the box.</div>
+
+    <table class="summary-table">
+      <caption>Method Summary</caption>
+      <tr><th>Method</th><th>Description</th></tr>
+      <tr><td>deleteById(Long)</td><td>Permanently deletes a comment from the database by its ID.</td></tr>
+      <tr><td>getPersistenceClass()</td><td>Tells the system which Java class this DAO is responsible for.</td></tr>
+      <tr><td>getSupportedObjectType()</td><td>Tells the system which object type this DAO handles.</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Method Detail</h2>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">public void</span> deleteById(<span class="ret">Long</span> id)</div></div>
+        <div class="member-body">
+          <p>Permanently deletes a comment from the database by its ID.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>id</td><td>the ID of the comment to delete; cannot be null</td></tr>
+          </table>
+          <div class="tag-throws"><b>Throws</b> <code>NullPointerException</code>: if the ID is null</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">Class&lt;ExtComment&gt;</span> getPersistenceClass()</div></div>
+        <div class="member-body"><p>Tells the system which Java class this DAO is responsible for.</p><div class="tag-returns"><b>Returns:</b> ExtComment.class</div></div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">String</span> getSupportedObjectType()</div></div>
+        <div class="member-body"><p>Tells the system which object type this DAO handles.</p><div class="tag-returns"><b>Returns:</b> "COMMENT"</div></div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtCommentService ──────────────────────────── -->
+  <div id="page-ExtCommentService" class="page">
+    <h1 class="page-title">ExtCommentService</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.service</span>
+    <span class="kind-badge kind-interface">Interface</span>
+    <div class="class-desc">Defines the available actions that can be performed on a comment. Any class that implements this interface must provide these three operations: save, find, and delete.</div>
+
+    <table class="summary-table">
+      <caption>Method Summary</caption>
+      <tr><th>Method</th><th>Description</th></tr>
+      <tr><td>save(ExtComment)</td><td>Saves a comment. Creates a new one if it has no ID, or updates it if it already has one.</td></tr>
+      <tr><td>findById(Long)</td><td>Finds and returns a comment by its ID.</td></tr>
+      <tr><td>deleteById(Long)</td><td>Permanently deletes a comment by its ID.</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Method Detail</h2>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">ExtComment</span> save(<span class="ret">ExtComment</span> extComment)</div></div>
+        <div class="member-body">
+          <p>Saves a comment. Creates a new one if it has no ID, or updates it if it already has one.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>extComment</td><td>the comment to save</td></tr>
+          </table>
+          <div class="tag-returns"><b>Returns:</b> the saved comment — use this returned copy, not the one you passed in</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">ExtComment</span> findById(<span class="ret">Long</span> id)</div></div>
+        <div class="member-body">
+          <p>Finds and returns a comment by its ID.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>id</td><td>the ID of the comment to find</td></tr>
+          </table>
+          <div class="tag-returns"><b>Returns:</b> the matching comment</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">void</span> deleteById(<span class="ret">Long</span> id)</div></div>
+        <div class="member-body">
+          <p>Permanently deletes a comment by its ID.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>id</td><td>the ID of the comment to delete</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtCommentServiceImpl ──────────────────────── -->
+  <div id="page-ExtCommentServiceImpl" class="page">
+    <h1 class="page-title">ExtCommentServiceImpl</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.service</span>
+    <span class="kind-badge kind-class">Class</span>
+    <div class="class-desc">The main implementation of ExtCommentService. Carries out comment operations by passing them to the database layer (ExtCommentDao). Registered as a Spring bean under the name "extCommentService".</div>
+
+    <table class="summary-table">
+      <caption>Field Summary</caption>
+      <tr><th>Name</th><th>Description</th></tr>
+      <tr><td>extCommentDao</td><td>The DAO used to talk to the database for comment operations.</td></tr>
+    </table>
+
+    <table class="summary-table">
+      <caption>Method Summary</caption>
+      <tr><th>Method</th><th>Description</th></tr>
+      <tr><td>save(ExtComment)</td><td>Saves a comment to the database. Creates it if new, updates it if it already exists.</td></tr>
+      <tr><td>findById(Long)</td><td>Looks up a comment in the database by its ID.</td></tr>
+      <tr><td>deleteById(Long)</td><td>Permanently deletes a comment from the database by its ID.</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Method Detail</h2>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">ExtComment</span> save(<span class="ret">ExtComment</span> extComment)</div></div>
+        <div class="member-body">
+          <p>Saves a comment to the database. Creates it if new, updates it if it already exists.</p>
+          <table class="param-table"><tr><th>Parameter</th><th>Description</th></tr><tr><td>extComment</td><td>the comment to save</td></tr></table>
+          <div class="tag-returns"><b>Returns:</b> the saved comment</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">ExtComment</span> findById(<span class="ret">Long</span> id)</div></div>
+        <div class="member-body">
+          <p>Looks up a comment in the database by its ID.</p>
+          <table class="param-table"><tr><th>Parameter</th><th>Description</th></tr><tr><td>id</td><td>the ID of the comment to find</td></tr></table>
+          <div class="tag-returns"><b>Returns:</b> the matching comment</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">void</span> deleteById(<span class="ret">Long</span> id)</div></div>
+        <div class="member-body">
+          <p>Permanently deletes a comment from the database by its ID.</p>
+          <table class="param-table"><tr><th>Parameter</th><th>Description</th></tr><tr><td>id</td><td>the ID of the comment to delete</td></tr></table>
+        </div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtCommentToSolrTransformer ────────────────── -->
+  <div id="page-ExtCommentToSolrTransformer" class="page">
+    <h1 class="page-title">ExtCommentToSolrTransformer</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.service</span>
+    <span class="kind-badge kind-class">Class</span>
+    <div class="class-desc">Converts comments into a format that can be saved in the Solr search index. This allows comments to show up in ArkCase search results. Registered as a Spring bean under the name "extCommentToSolrTransformer".</div>
+
+    <table class="summary-table">
+      <caption>Field Summary</caption>
+      <tr><th>Name</th><th>Description</th></tr>
+      <tr><td>extCommentDao</td><td>Used to fetch comments from the database.</td></tr>
+      <tr><td>searchAccessControlFields</td><td>Sets access control fields so only authorized users see a comment in search results.</td></tr>
+      <tr><td>userJpaDao</td><td>Used to look up user details like full names from a user ID.</td></tr>
+    </table>
+
+    <table class="summary-table">
+      <caption>Method Summary</caption>
+      <tr><th>Method</th><th>Description</th></tr>
+      <tr><td>getObjectsModifiedSince(Date, int, int)</td><td>Returns a list of comments changed since a given date.</td></tr>
+      <tr><td>toSolrAdvancedSearch(ExtComment)</td><td>Converts a single comment into a Solr search document.</td></tr>
+      <tr><td>mapAdditionalProperties(ExtComment, Map)</td><td>Adds extra comment-specific fields to the Solr document.</td></tr>
+      <tr><td>isAcmObjectTypeSupported(Class)</td><td>Returns true if this transformer supports the given class type.</td></tr>
+      <tr><td>getAcmObjectTypeSupported()</td><td>Returns the class that this transformer handles.</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Method Detail</h2>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">List&lt;ExtComment&gt;</span> getObjectsModifiedSince(<span class="ret">Date</span> lastModified, <span class="ret">int</span> start, <span class="ret">int</span> pageSize)</div></div>
+        <div class="member-body">
+          <p>Returns a list of comments that have been changed since a given date. Used by the search indexer to keep search results up to date.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>lastModified</td><td>only return comments changed after this date</td></tr>
+            <tr><td>start</td><td>which record to start from (for paging through results)</td></tr>
+            <tr><td>pageSize</td><td>how many records to return at once</td></tr>
+          </table>
+          <div class="tag-returns"><b>Returns:</b> a list of recently changed comments</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">SolrAdvancedSearchDocument</span> toSolrAdvancedSearch(<span class="ret">ExtComment</span> extComment)</div></div>
+        <div class="member-body">
+          <p>Converts a single comment into a Solr search document. Sets standard fields like ID, type, creator, and dates, then calls mapAdditionalProperties for the rest.</p>
+          <table class="param-table"><tr><th>Parameter</th><th>Description</th></tr><tr><td>extComment</td><td>the comment to convert</td></tr></table>
+          <div class="tag-returns"><b>Returns:</b> a Solr document ready to be indexed</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">void</span> mapAdditionalProperties(<span class="ret">ExtComment</span> extComment, <span class="ret">Map</span> additionalProperties)</div></div>
+        <div class="member-body">
+          <p>Adds extra comment-specific fields to the Solr document such as status, assignee name, parent info, and participant list. If a user (assignee, creator, or modifier) cannot be found, their full name is simply left out.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>extComment</td><td>the comment being indexed</td></tr>
+            <tr><td>additionalProperties</td><td>the map of extra Solr fields to populate</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">boolean</span> isAcmObjectTypeSupported(<span class="ret">Class</span> acmObjectType)</div></div>
+        <div class="member-body">
+          <p>Returns true if this transformer supports the given class type. Only returns true for ExtComment itself.</p>
+          <table class="param-table"><tr><th>Parameter</th><th>Description</th></tr><tr><td>acmObjectType</td><td>the class to check</td></tr></table>
+          <div class="tag-returns"><b>Returns:</b> true if the class is ExtComment, false otherwise</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">Class&lt;?&gt;</span> getAcmObjectTypeSupported()</div></div>
+        <div class="member-body"><p>Returns the class that this transformer handles.</p><div class="tag-returns"><b>Returns:</b> ExtComment.class</div></div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc · Generated by Claude</footer>
+  </div>
+
+  <!-- ─── ExtCommentAPIController ────────────────────── -->
+  <div id="page-ExtCommentAPIController" class="page">
+    <h1 class="page-title">ExtCommentAPIController</h1>
+    <span class="pkg-label">ext.training.acm.plugins.comment.web.api</span>
+    <span class="kind-badge kind-class">Class</span>
+    <div class="class-desc">Handles incoming HTTP requests for comment operations. Exposes endpoints to get, save, and delete comments. All endpoints are available under: <code>/api/v1/plugin/ext/comment</code>. After every create, update, or delete, an event is fired so other parts of the system (like audit logging) can react.</div>
+
+    <table class="summary-table">
+      <caption>Field Summary</caption>
+      <tr><th>Name</th><th>Description</th></tr>
+      <tr><td>extCommentService</td><td>The service used to perform comment operations.</td></tr>
+      <tr><td>applicationEventPublisher</td><td>Used to fire events after a comment is changed.</td></tr>
+    </table>
+
+    <table class="summary-table">
+      <caption>Method Summary</caption>
+      <tr><th>Method</th><th>Description</th></tr>
+      <tr><td>findById(Long)</td><td>GET – Returns a single comment by its ID.</td></tr>
+      <tr><td>saveExtComment(ExtComment, HttpSession)</td><td>POST – Creates or updates a comment.</td></tr>
+      <tr><td>deleteExtCommentById(Long, HttpSession)</td><td>DELETE – Permanently deletes a comment by its ID.</td></tr>
+      <tr><td>publishExtCommentEvent(ExtComment, String, String)</td><td>Fires an event to notify the rest of the system that a comment was changed.</td></tr>
+    </table>
+
+    <div class="detail-section">
+      <h2>Method Detail</h2>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">ExtComment</span> findById(<span class="ret">Long</span> id)</div></div>
+        <div class="member-body">
+          <p><b>GET</b> <code>/api/v1/plugin/ext/comment/{id}</code> — Returns a single comment by its ID.</p>
+          <table class="param-table"><tr><th>Parameter</th><th>Description</th></tr><tr><td>id</td><td>the ID of the comment to retrieve</td></tr></table>
+          <div class="tag-returns"><b>Returns:</b> the matching comment as JSON</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="ret">ExtComment</span> saveExtComment(<span class="ret">ExtComment</span> extComment, <span class="ret">HttpSession</span> httpSession)</div></div>
+        <div class="member-body">
+          <p><b>POST</b> <code>/api/v1/plugin/ext/comment</code> — Creates or updates a comment. If the comment has no ID it will be created; if it already has an ID it will be updated.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>extComment</td><td>the comment data sent in the request body</td></tr>
+            <tr><td>httpSession</td><td>the current session, used to read the user's IP address</td></tr>
+          </table>
+          <div class="tag-returns"><b>Returns:</b> the saved comment as JSON</div>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">void</span> deleteExtCommentById(<span class="ret">Long</span> id, <span class="ret">HttpSession</span> httpSession)</div></div>
+        <div class="member-body">
+          <p><b>DELETE</b> <code>/api/v1/plugin/ext/comment/{id}</code> — Permanently deletes a comment by its ID. The comment is loaded first so its details can be included in the audit event.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>id</td><td>the ID of the comment to delete</td></tr>
+            <tr><td>httpSession</td><td>the current session, used to read the user's IP address</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <div class="member">
+        <div class="member-header"><div class="member-sig"><span class="kw">private void</span> publishExtCommentEvent(<span class="ret">ExtComment</span> extComment, <span class="ret">String</span> eventType, <span class="ret">String</span> ipAddress)</div></div>
+        <div class="member-body">
+          <p>Fires an event to notify the rest of the system that a comment was changed. Used for audit logging and keeping the search index up to date.</p>
+          <table class="param-table">
+            <tr><th>Parameter</th><th>Description</th></tr>
+            <tr><td>extComment</td><td>the comment that was affected</td></tr>
+            <tr><td>eventType</td><td>what happened — "create", "update", or "delete"</td></tr>
+            <tr><td>ipAddress</td><td>the IP address of the user who made the change</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+    <footer>ext-comment Plugin Javadoc </footer>
+  </div>
+
+</div><!-- end #main -->
+
+<script>
+function show(id) {
+  // Hide all pages
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  // Remove active from all sidebar links
+  document.querySelectorAll('#sidebar a').forEach(a => a.classList.remove('active'));
+
+  // Show selected page
+  document.getElementById('page-' + id).classList.add('active');
+
+  // Mark the clicked sidebar link active
+  document.querySelectorAll('#sidebar a').forEach(a => {
+    if (a.getAttribute('onclick') === "show('" + id + "')") {
+      a.classList.add('active');
+    }
+  });
+
+  // Scroll main back to top on switch
+  document.getElementById('main').scrollTop = 0;
+}
+</script>
+</body>
+</html>
