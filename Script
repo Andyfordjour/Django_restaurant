@@ -29,3 +29,14 @@ else
   echo "     Password: arkcase"
   echo ""
 fi
+
+
+# Check if expected port is actually reachable
+info "  Testing connection to port $PORT..."
+if nc -zw3 localhost $PORT > /dev/null 2>&1; then
+  success "  Port $PORT is reachable — connection successful."
+else
+  error "  Port $PORT is NOT reachable — connection timed out or refused!"
+  info "  Container may be starting up or port may be blocked."
+  info "  Try: nc -zv localhost $PORT"
+fi
