@@ -1,42 +1,114 @@
-if [ "$FAILED" = false ]; then
-
 # ============================================================
-# FINAL SUMMARY
+# STEP 3 - Check Docker is running
 # ============================================================
 echo ""
-echo "============================================================"
+echo -e "${BLUE}[3/8] Checking Docker and required services...${NC}"
 
-if [ "$FAILED" = true ]; then
-  echo -e "${RED} ✘ Script completed with errors!${NC}"
-  echo -e "${RED} Review the errors above, fix them and re-run.${NC}"
-  echo "============================================================"
-  echo ""
-  return 1 2>/dev/null || exit 1
+if ! docker info > /dev/null 2>&1; then
+  error "Docker is not running!"
+  info "Attempting to start Docker..."
+  sudo service docker start > /dev/null 2>&1
+  sleep 5
+  if ! docker info > /dev/null 2>&1; then
+    error "Failed to start Docker!"
+    info "Try manually: sudo service docker start"
+  else
+    success "Docker started successfully."
+  fi
 else
-  echo -e "${GREEN} ✔ All setup steps completed successfully!${NC}"
-  echo "============================================================"
-  echo ""
-  echo -e "${BLUE} Next Steps:${NC}"
-  echo "  1. Go to the SERVERS panel in VS Code"
-  echo "  2. Right-click Tomcat 9.x and click Start"
-  echo "  3. Watch the OUTPUT tab for logs"
-  echo "  4. Once you see 'Server startup in [xxxx] milliseconds'"
-  echo "     open your browser and go to:"
-  echo ""
-  echo -e "${GREEN}     https://acm-arkcase:8843/arkcase${NC}"
-  echo ""
-  echo "     Username: arkcase-admin@arkcase.org"
-  echo "     Password: arkcase"
-  echo ""
+  success "Docker is running."
 fi
 
-
-# Check if expected port is actually reachable
-info "  Testing connection to port $PORT..."
-if nc -zw3 localhost $PORT > /dev/null 2>&1; then
-  success "  Port $PORT is reachable — connection successful."
+# Check and install netcat if not installed
+info "Checking if netcat is installed..."
+if ! command -v nc > /dev/null 2>&1; then
+  warning "netcat is not installed. Installing now..."
+  sudo apt-get install -y netcat > /dev/null 2>&1
+  if ! command -v nc > /dev/null 2>&1; then
+    error "Failed to install netcat!"
+    info "Try manually: sudo apt-get install netcat"
+  else
+    success "netcat installed successfully."
+  fi
 else
-  error "  Port $PORT is NOT reachable — connection timed out or refused!"
-  info "  Container may be starting up or port may be blocked."
-  info "  Try: nc -zv localhost $PORT"
+  success "netcat is already installed."
 fi
+
+# Define required containers and their expected ports
+declare -A CONTAINER_PORTS
+CONTAINER_PORTS["mariadb"]="3306"
+CONTAINER_PORTS["minio"]="9000"
+CONTAINER_PORTS["solr-standalone"]="8983"
+CONTAINER_PORTS["activemq"]="61616"
+CONTAINER_PORTS["samba"]="389"
+
+echo ""
+info "Checking required containers..."
+echo ""
+
+# Check if any containers are missing and run docker-compose if needed
+MISSING_CONTAINERS=false
+for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
+  if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    MISSING_CONTAINERS=true
+    warning "Container '$CONTAINER' is not running."
+  fi
+done
+
+# If any containers are missing run docker-compose
+if [ "$MISSING_CONTAINERS" = true ]; then
+  echo ""
+  warning "Some containers are not running. Attempting to start them..."
+  info "Running docker-compose up in $DOCKER_SERVICES_DIR..."
+
+  if [ ! -d "$DOCKER_SERVICES_DIR" ]; then
+    error "Docker Services directory not found at: $DOCKER_SERVICES_DIR"
+    info "Cannot run docker-compose without this directory."
+  else
+    cd "$DOCKER_SERVICES_DIR"
+    docker-compose up -d > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+      success "docker-compose started successfully."
+      info "Waiting 30 seconds for containers to be ready..."
+      sleep 30
+    else
+      error "docker-compose failed to start!"
+      info "Try manually: cd $DOCKER_SERVICES_DIR && docker-compose up -d"
+    fi
+    cd - > /dev/null 2>&1
+  fi
+fi
+
+# Now check each container status and port connectivity
+echo ""
+info "Verifying all containers..."
+echo ""
+
+for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
+  PORT=${CONTAINER_PORTS[$CONTAINER]}
+
+  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    STATUS=$(docker ps --format '{{.Names}}\t{{.Status}}' | grep "^${CONTAINER}" | awk '{print $2, $3, $4}')
+    PORTS=$(docker ps --format '{{.Names}}\t{{.Ports}}' | grep "^${CONTAINER}" | cut -f2)
+
+    success "Container '$CONTAINER' is running."
+    info "  Status : $STATUS"
+    info "  Ports  : $PORTS"
+
+    # Test actual port connectivity
+    info "  Testing connection to port $PORT..."
+    if nc -zw3 localhost $PORT > /dev/null 2>&1; then
+      success "  Port $PORT is reachable — connection successful."
+    else
+      error "  Port $PORT is NOT reachable — connection timed out!"
+      info "  Container may still be starting up."
+      info "  Try: nc -zv localhost $PORT"
+    fi
+  else
+    error "Container '$CONTAINER' is still NOT running after docker-compose!"
+    info "  Check logs with: docker logs $CONTAINER"
+    info "  Try manually: cd $DOCKER_SERVICES_DIR && docker-compose up -d"
+  fi
+
+  echo ""
+done
