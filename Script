@@ -112,3 +112,21 @@ for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
 
   echo ""
 done
+
+# Final Docker summary
+ALL_CONTAINERS_UP=true
+for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
+  if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
+    ALL_CONTAINERS_UP=false
+  fi
+done
+
+if [ "$ALL_CONTAINERS_UP" = true ]; then
+  echo ""
+  success "All required Docker containers are running."
+else
+  echo ""
+  error "One or more required Docker containers are still not running!"
+  info "Check the errors above and fix them before starting ArkCase."
+fi
+
