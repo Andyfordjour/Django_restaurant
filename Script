@@ -99,6 +99,10 @@ for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
     info "  Testing connection to port $PORT..."
     if nc -zw3 localhost $PORT > /dev/null 2>&1; then
       success "  Port $PORT is reachable — connection successful."
+
+
+
+
     else
       error "  Port $PORT is NOT reachable — connection timed out!"
       info "  Container may still be starting up."
@@ -129,4 +133,12 @@ else
   error "One or more required Docker containers are still not running!"
   info "Check the errors above and fix them before starting ArkCase."
 fi
+
+
+cat > ~/training/apache-tomcat-9.0.117/bin/setenv.sh << 'EOF'
+export JAVA_OPTS="-Xms2g -Xmx4g -XX:MaxMetaspaceSize=512m"
+EOF
+
+# Make it executable
+chmod +x ~/training/apache-tomcat-9.0.117/bin/setenv.sh
 
