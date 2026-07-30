@@ -114,6 +114,9 @@ for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
     info "  Try manually: cd $DOCKER_SERVICES_DIR && docker-compose up -d"
   fi
 
+
+
+
   echo ""
 done
 
@@ -141,4 +144,18 @@ EOF
 
 # Make it executable
 chmod +x ~/training/apache-tomcat-9.0.117/bin/setenv.sh
+
+
+
+select 
+    per.cm_given_name || ' ' || per.cm_family_name as 'Person Name',
+    pa.cm_person_assoc_person_type as 'Role',
+    c.cm_complaint_title as 'Matter Name',
+    c.cm_complaint_number as 'Matter Number'
+from acm_complaint c
+    left join acm_person_assoc pa 
+        on pa.cm_person_assoc_parent_id = c.cm_complaint_id 
+        and pa.cm_person_assoc_parent_type = c.cm_object_type
+    left join acm_person per 
+        on per.cm_person_id = pa.cm_person_assoc_person_id
 
