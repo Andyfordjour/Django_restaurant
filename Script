@@ -159,3 +159,20 @@ from acm_complaint c
     left join acm_person per 
         on per.cm_person_id = pa.cm_person_assoc_person_id
 
+select 
+    c.cm_complaint_title as 'Matter Name',
+    c.cm_complaint_number as 'Matter Number',
+    c.cm_complaint_created as 'Date Created',
+    p.cm_participant_ldap_id as 'Assignee'
+from acm_complaint c
+    join acm_participant p 
+        on p.cm_object_id = c.cm_complaint_id 
+        and p.cm_object_type = c.cm_object_type
+        and p.cm_participant_type = 'assignee'
+where c.cm_complaint_created >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
+
+
+
+
+
+
