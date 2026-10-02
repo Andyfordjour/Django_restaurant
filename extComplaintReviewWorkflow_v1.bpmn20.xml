@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Complaint Review workflow (extension). Modeled on core's DefaultComplaintWorkflow_v5.bpmn20.xml
+    (acm-complaint-plugin), reduced to a single task with a single reviewer.
+
+    Deployed by ExtWorkflowDeployer (spring-library-ext-complaint.xml), NOT by core's scanner: core only
+    scans acm*/ArkCase*/DefaultComplaint*/Corrective*/Media* file names.
+
+    Started by ExtComplaintReviewAPIController with these process variables:
+        complaintTitle     - shown in the task name
+        reviewer           - user id the task is assigned to
+        OBJECT_TYPE/ID     - standard ArkCase variables
+        PARENT_OBJECT_*    - attaches the task to the Complaint (shows on the Complaint's Tasks tab)
+-->
+<definitions targetNamespace="http://activiti.org/bpmn20" xmlns:activiti="http://activiti.org/bpmn"
+    xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+    xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xsi:schemaLocation="http://www.omg.org/spec/BPMN/20100524/MODEL
+                    https://www.omg.org/spec/BPMN/2.0/20100501/BPMN20.xsd">
+
+    <process id="extComplaintReviewWorkflow" name="Complaint review process (extension)">
+
+        <startEvent id="complaintSubmittedForReview"/>
+
+        <sequenceFlow id="submittedToReview" sourceRef="complaintSubmittedForReview" targetRef="reviewComplaint"/>
+
+        <userTask id="reviewComplaint" name="Review Complaint '${complaintTitle}'" activiti:assignee="${reviewer}"
+            activiti:dueDate="P3D" activiti:priority="50">
+            <documentation>
+                Review the complaint and complete this task when done.
+            </documentation>
+        </userTask>
+
+        <sequenceFlow id="reviewToEnd" sourceRef="reviewComplaint" targetRef="done"/>
+
+        <endEvent id="done"/>
+
+    </process>
+
+    <bpmndi:BPMNDiagram id="BPMNDiagram_extComplaintReviewWorkflow">
+        <bpmndi:BPMNPlane bpmnElement="extComplaintReviewWorkflow" id="BPMNPlane_extComplaintReviewWorkflow">
+            <bpmndi:BPMNShape bpmnElement="complaintSubmittedForReview" id="BPMNShape_complaintSubmittedForReview">
+                <omgdc:Bounds height="35.0" width="35.0" x="80.0" y="160.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="reviewComplaint" id="BPMNShape_reviewComplaint">
+                <omgdc:Bounds height="80.0" width="120.0" x="180.0" y="137.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNShape bpmnElement="done" id="BPMNShape_done">
+                <omgdc:Bounds height="35.0" width="35.0" x="370.0" y="160.0"/>
+            </bpmndi:BPMNShape>
+            <bpmndi:BPMNEdge bpmnElement="submittedToReview" id="BPMNEdge_submittedToReview">
+                <omgdi:waypoint x="115.0" y="177.0"/>
+                <omgdi:waypoint x="180.0" y="177.0"/>
+            </bpmndi:BPMNEdge>
+            <bpmndi:BPMNEdge bpmnElement="reviewToEnd" id="BPMNEdge_reviewToEnd">
+                <omgdi:waypoint x="300.0" y="177.0"/>
+                <omgdi:waypoint x="370.0" y="177.0"/>
+            </bpmndi:BPMNEdge>
+        </bpmndi:BPMNPlane>
+    </bpmndi:BPMNDiagram>
+</definitions>
