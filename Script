@@ -173,6 +173,45 @@ where c.cm_complaint_created >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
 
 
 
+#!/usr/bin/env bash
+# 1. Define your API Token and Base URL
+TOKEN=""
+BASE_URL="https://nysits-stage.arkcase.us/arkcase"
+echo "$BASE_URL"
+
+# 2. Build the URL to get the list of users from all the groups
+DIRECTORY_NAME="arkcase"
+USERS_URL="$BASE_URL/api/latest/users/$DIRECTORY_NAME/groups"
+echo "$USERS_URL"
+
+# 3. Call the API with the authorization header
+RESPONSE=$(curl -sS -f -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" "$USERS_URL")
+
+# 4. Stop if the call failed or the JSON has no documents
+if [ $? -ne 0 ] || ! echo "$RESPONSE" | jq -e '.response.docs' > /dev/null 2>&1; then
+  echo "Failed to retrieve or parse data from the API." >&2
+  exit 1
+fi
+
+# 5. Loop through each document and extract the group name and its members
+echo "Total Groups: $(echo "$RESPONSE" | jq '.response.docs | length')"
+echo "$RESPONSE" | jq -c '.response.docs[]' | while read -r doc; do
+  GROUP_NAME=$(echo "$doc" | jq -r '.name')
+
+  echo -e "\e[33m----------------------------------------\e[0m"
+  echo -e "\e[36mGroup: $GROUP_NAME\e[0m"
+  echo "Total Members: $(echo "$doc" | jq '.member_id_ss | length')"
+  echo "----------------------------------------"
+
+  # 6. Output each member email
+  echo "$doc" | jq -r '.member_id_ss[]?' | while read -r member; do
+    echo "  - $member"
+  done
+done
+
+
+
+
 
 
 
