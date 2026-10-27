@@ -172,42 +172,213 @@ from acm_complaint c
 where c.cm_complaint_created >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
 
 
+# =====================================================================
+# MigrateFolderToCase.ps1
+# Copies a folder from your computer into an ArkCase case:
+#   - creates every subfolder (same as your folder-creation function)
+#   - uploads every file into its matching folder (same as UploadFile.ps1)
+# Windows PowerShell 5.1. Run with F5.
+#
+# ArkCase has no "upload a whole folder" API, so we walk the folder ourselves:
+#   for each folder: upload its files, then create each subfolder and repeat inside it.
+#
+# Keeps going if something fails, and prints a summary at the end.
+# Use -WhatIf to see what WOULD happen without changing anything in ArkCase.
+# =====================================================================
 
-#!/usr/bin/env bash
-# 1. Define your API Token and Base URL
-TOKEN=""
-BASE_URL="https://nysits-stage.arkcase.us/arkcase"
-echo "$BASE_URL"
+param(
+    [switch]$WhatIf      # dry run: list what would be created/uploaded, call nothing
+)
 
-# 2. Build the URL to get the list of users from all the groups
-DIRECTORY_NAME="arkcase"
-USERS_URL="$BASE_URL/api/latest/users/$DIRECTORY_NAME/groups"
-echo "$USERS_URL"
+# ---------- Setup ----------
+Import-Module V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\BriefcaseFunctions.psm1 -Force
 
-# 3. Call the API with the authorization header
-RESPONSE=$(curl -sS -f -H "Authorization: Bearer $TOKEN" -H "Accept: application/json" "$USERS_URL")
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+Add-Type -AssemblyName System.Net.Http
 
-# 4. Stop if the call failed or the JSON has no documents
-if [ $? -ne 0 ] || ! echo "$RESPONSE" | jq -e '.response.docs' > /dev/null 2>&1; then
-  echo "Failed to retrieve or parse data from the API." >&2
-  exit 1
-fi
+$BaseUrl = $Global:StageUrl
+$Headers = @{ "Authorization" = "Bearer $Global:Token"; "Accept" = "application/json" }
 
-# 5. Loop through each document and extract the group name and its members
-echo "Total Groups: $(echo "$RESPONSE" | jq '.response.docs | length')"
-echo "$RESPONSE" | jq -c '.response.docs[]' | while read -r doc; do
-  GROUP_NAME=$(echo "$doc" | jq -r '.name')
+# HttpClient is only needed for uploadPart (form upload). Create it once and reuse it.
+$Client = New-Object System.Net.Http.HttpClient
+$Client.DefaultRequestHeaders.Add("Authorization", "Bearer $Global:Token")
+$Client.Timeout = [TimeSpan]::FromMinutes(30)    # allow time for bigger files
 
-  echo -e "\e[33m----------------------------------------\e[0m"
-  echo -e "\e[36mGroup: $GROUP_NAME\e[0m"
-  echo "Total Members: $(echo "$doc" | jq '.member_id_ss | length')"
-  echo "----------------------------------------"
+# Running totals and problems, for the summary at the end
+$script:FoldersCreated = 0
+$script:FilesUploaded  = 0
+$script:Failures       = New-Object System.Collections.Generic.List[string]
 
-  # 6. Output each member email
-  echo "$doc" | jq -r '.member_id_ss[]?' | while read -r member; do
-    echo "  - $member"
-  done
-done
+
+# ---------- Helper: pull the clearest error message out of a failure ----------
+function Get-ErrorText {
+    param($ErrorRecord)
+    if ($ErrorRecord.ErrorDetails -and $ErrorRecord.ErrorDetails.Message) { return $ErrorRecord.ErrorDetails.Message }
+    return $ErrorRecord.Exception.Message
+}
+
+
+# ---------- Create one folder inside a parent folder ----------
+# PUT /api/v1/service/ecm/folder/{parentFolderId}/{folderName}
+# Returns the new folder's ID.
+function New-CaseFolder {
+    param([long]$ParentFolderId, [string]$FolderName)
+
+    $name   = [Uri]::EscapeDataString($FolderName)
+    $folder = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/ecm/folder/$ParentFolderId/$name" -Method Put -Headers $Headers -ErrorAction Stop
+    Return $folder.id
+}
+
+
+# ---------- Upload one file into a folder (the 3 steps from UploadFile.ps1) ----------
+function Send-FileToFolder {
+    param([long]$CaseId, [long]$FolderId, $File)
+
+    # Step 1: beginUpload -> upload ID + ArkCase's plan (how many pieces, how big)
+    $name  = [Uri]::EscapeDataString($File.Name)
+    $begin = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/ecm/beginUpload?fileName=$name&fileSize=$($File.Length)&folderId=$FolderId&parentObjectId=$CaseId&parentObjectType=CASE_FILE" -Method Get -Headers $Headers -ErrorAction Stop
+
+    $uploadId = [Uri]::EscapeDataString($begin.uploadId)
+    $numParts = [int]$begin.acmUploadPlan.numParts
+    $partSize = [long]$begin.acmUploadPlan.partSize
+    if ($numParts -lt 1) { $numParts = 1 }
+    if ($partSize -le 0) { $partSize = $File.Length }
+
+    # Step 2: uploadPart, once per piece.
+    # Small files = 1 piece (tested and working).
+    # Large files = several pieces (NOT YET TESTED - try one large file on a test case first).
+    $stream = [System.IO.File]::OpenRead($File.FullName)
+    try {
+        for ($part = 1; $part -le $numParts; $part++) {
+
+            # Read the next piece of the file
+            $size   = [int][Math]::Min($partSize, $File.Length - $stream.Position)
+            $buffer = New-Object byte[] $size
+            [void]$stream.Read($buffer, 0, $size)
+
+            # Put it in a form under "partOfFile" (quotes needed for the Java server)
+            $form     = New-Object System.Net.Http.MultipartFormDataContent
+            $fileData = New-Object System.Net.Http.ByteArrayContent(,$buffer)
+            $form.Add($fileData, '"partOfFile"', '"' + $File.Name + '"')
+
+            $url  = "$BaseUrl/api/v1/service/ecm/uploadPart?uploadId=$uploadId&partNumber=$part&folderId=$FolderId&partSize=$size"
+            $resp = $Client.PutAsync($url, $form).Result
+
+            # Stop this file if ArkCase refused the piece, so we never "complete" an empty or broken file
+            if (-not $resp.IsSuccessStatusCode) {
+                throw "uploadPart $part of $numParts failed: $([int]$resp.StatusCode) $($resp.Content.ReadAsStringAsync().Result)"
+            }
+        }
+    }
+    finally {
+        $stream.Dispose()    # always release the file
+    }
+
+    # Step 3: completeUpload -> ArkCase saves the file in the folder
+    $body = @{
+        uploadId         = $begin.uploadId
+        fileName         = $File.Name
+        originalFileName = $File.Name
+        parentObjectId   = $CaseId
+        parentObjectType = "CASE_FILE"
+        targetFolderId   = $FolderId
+    } | ConvertTo-Json
+
+    $done = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/ecm/completeUpload" -Method Post -Headers $Headers -Body $body -ContentType "application/json" -ErrorAction Stop
+}
+
+
+# ---------- The migration: copy one local folder's contents into one ArkCase folder ----------
+# Recursive, like New-FolderTree:
+#   1. upload the files in this folder
+#   2. for each subfolder: create it in ArkCase, then do the same inside it
+function Copy-FolderToCase {
+    param([long]$CaseId, [string]$LocalFolder, [long]$ArkFolderId, [string]$Indent = "")
+
+    # 1. Files in this folder
+    foreach ($file in Get-ChildItem -LiteralPath $LocalFolder -File) {
+        if ($WhatIf) { Write-Host "$Indent[would upload] $($file.Name) ($($file.Length) bytes)"; continue }
+
+        try {
+            Send-FileToFolder -CaseId $CaseId -FolderId $ArkFolderId -File $file
+            $script:FilesUploaded++
+            Write-Host "$Indent[uploaded] $($file.Name)" -ForegroundColor Green
+        }
+        catch {
+            $script:Failures.Add("FILE    $($file.FullName) - $(Get-ErrorText $_)")
+            Write-Host "$Indent[FAILED]   $($file.Name)" -ForegroundColor Red
+        }
+    }
+
+    # 2. Subfolders: create, then go inside
+    foreach ($dir in Get-ChildItem -LiteralPath $LocalFolder -Directory) {
+        if ($WhatIf) {
+            Write-Host "$Indent[would create folder] $($dir.Name)"
+            Copy-FolderToCase -CaseId $CaseId -LocalFolder $dir.FullName -ArkFolderId 0 -Indent "$Indent    "
+            continue
+        }
+
+        try {
+            $newId = New-CaseFolder -ParentFolderId $ArkFolderId -FolderName $dir.Name
+            $script:FoldersCreated++
+            Write-Host "$Indent[folder]   $($dir.Name) (ID $newId)" -ForegroundColor Cyan
+        }
+        catch {
+            # Folder failed (e.g. it already exists): skip it and everything inside, keep going
+            $script:Failures.Add("FOLDER  $($dir.FullName) - $(Get-ErrorText $_) (its contents were skipped)")
+            Write-Host "$Indent[FAILED]   folder $($dir.Name) - skipping its contents" -ForegroundColor Red
+            continue
+        }
+
+        Copy-FolderToCase -CaseId $CaseId -LocalFolder $dir.FullName -ArkFolderId $newId -Indent "$Indent    "
+    }
+}
+
+
+# ---------- Run ----------
+$CaseId      = Read-Host "Enter the case ID"
+$LocalFolder = (Read-Host "Enter the full path of the folder to migrate").Trim('"')
+
+if (-not (Test-Path -LiteralPath $LocalFolder -PathType Container)) {
+    Write-Host "Folder not found: $LocalFolder" -ForegroundColor Red
+    return
+}
+
+$top = Get-Item -LiteralPath $LocalFolder
+if ($WhatIf) { Write-Host "DRY RUN - nothing will be created or uploaded." -ForegroundColor Yellow }
+
+try {
+    # Find the case's main folder: GET /api/v1/service/ecm/folder/CASE_FILE/{caseId}
+    $root = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/ecm/folder/CASE_FILE/$CaseId" -Method Get -Headers $Headers -ErrorAction Stop
+
+    # Create the top folder itself (e.g. "DHR") inside the case's main folder, then copy into it
+    if ($WhatIf) {
+        Write-Host "[would create folder] $($top.Name)"
+        Copy-FolderToCase -CaseId $CaseId -LocalFolder $top.FullName -ArkFolderId 0 -Indent "    "
+    }
+    else {
+        $topId = New-CaseFolder -ParentFolderId $root.folderId -FolderName $top.Name
+        $script:FoldersCreated++
+        Write-Host "[folder]   $($top.Name) (ID $topId)" -ForegroundColor Cyan
+        Copy-FolderToCase -CaseId $CaseId -LocalFolder $top.FullName -ArkFolderId $topId -Indent "    "
+    }
+}
+catch {
+    Write-Host "Could not start: $(Get-ErrorText $_)" -ForegroundColor Red
+}
+
+# ---------- Summary ----------
+Write-Host ""
+if (-not $WhatIf) {
+    Write-Host "Done. Folders created: $($script:FoldersCreated). Files uploaded: $($script:FilesUploaded)." -ForegroundColor Cyan
+}
+if ($script:Failures.Count -gt 0) {
+    Write-Host "$($script:Failures.Count) problem(s):" -ForegroundColor Yellow
+    $script:Failures | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+}
+
+$Client.Dispose()
+
 
 
 
