@@ -1,388 +1,311 @@
-# ============================================================
-# STEP 3 - Check Docker is running
-# ============================================================
-echo ""
-echo -e "${BLUE}[3/8] Checking Docker and required services...${NC}"
-
-if ! docker info > /dev/null 2>&1; then
-  error "Docker is not running!"
-  info "Attempting to start Docker..."
-  sudo service docker start > /dev/null 2>&1
-  sleep 5
-  if ! docker info > /dev/null 2>&1; then
-    error "Failed to start Docker!"
-    info "Try manually: sudo service docker start"
-  else
-    success "Docker started successfully."
-  fi
-else
-  success "Docker is running."
-fi
-
-# Check and install netcat if not installed
-info "Checking if netcat is installed..."
-if ! command -v nc > /dev/null 2>&1; then
-  warning "netcat is not installed. Installing now..."
-  sudo apt-get install -y netcat > /dev/null 2>&1
-  if ! command -v nc > /dev/null 2>&1; then
-    error "Failed to install netcat!"
-    info "Try manually: sudo apt-get install netcat"
-  else
-    success "netcat installed successfully."
-  fi
-else
-  success "netcat is already installed."
-fi
-
-# Define required containers and their expected ports
-declare -A CONTAINER_PORTS
-CONTAINER_PORTS["mariadb"]="3306"
-CONTAINER_PORTS["minio"]="9000"
-CONTAINER_PORTS["solr-standalone"]="8983"
-CONTAINER_PORTS["activemq"]="61616"
-CONTAINER_PORTS["samba"]="389"
-
-echo ""
-info "Checking required containers..."
-echo ""
-
-# Check if any containers are missing and run docker-compose if needed
-MISSING_CONTAINERS=false
-for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
-  if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-    MISSING_CONTAINERS=true
-    warning "Container '$CONTAINER' is not running."
-  fi
-done
-
-# If any containers are missing run docker-compose
-if [ "$MISSING_CONTAINERS" = true ]; then
-  echo ""
-  warning "Some containers are not running. Attempting to start them..."
-  info "Running docker-compose up in $DOCKER_SERVICES_DIR..."
-
-  if [ ! -d "$DOCKER_SERVICES_DIR" ]; then
-    error "Docker Services directory not found at: $DOCKER_SERVICES_DIR"
-    info "Cannot run docker-compose without this directory."
-  else
-    cd "$DOCKER_SERVICES_DIR"
-    docker-compose up -d > /dev/null 2>&1
-    if [ $? -eq 0 ]; then
-      success "docker-compose started successfully."
-      info "Waiting 30 seconds for containers to be ready..."
-      sleep 30
-    else
-      error "docker-compose failed to start!"
-      info "Try manually: cd $DOCKER_SERVICES_DIR && docker-compose up -d"
-    fi
-    cd - > /dev/null 2>&1
-  fi
-fi
-
-# Now check each container status and port connectivity
-echo ""
-info "Verifying all containers..."
-echo ""
-
-for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
-  PORT=${CONTAINER_PORTS[$CONTAINER]}
-
-  if docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-    STATUS=$(docker ps --format '{{.Names}}\t{{.Status}}' | grep "^${CONTAINER}" | awk '{print $2, $3, $4}')
-    PORTS=$(docker ps --format '{{.Names}}\t{{.Ports}}' | grep "^${CONTAINER}" | cut -f2)
-
-    success "Container '$CONTAINER' is running."
-    info "  Status : $STATUS"
-    info "  Ports  : $PORTS"
-
-    # Test actual port connectivity
-    info "  Testing connection to port $PORT..."
-    if nc -zw3 localhost $PORT > /dev/null 2>&1; then
-      success "  Port $PORT is reachable — connection successful."
-
-
-
-
-    else
-      error "  Port $PORT is NOT reachable — connection timed out!"
-      info "  Container may still be starting up."
-      info "  Try: nc -zv localhost $PORT"
-    fi
-  else
-    error "Container '$CONTAINER' is still NOT running after docker-compose!"
-    info "  Check logs with: docker logs $CONTAINER"
-    info "  Try manually: cd $DOCKER_SERVICES_DIR && docker-compose up -d"
-  fi
-
-
-
-
-  echo ""
-done
-
-# Final Docker summary
-ALL_CONTAINERS_UP=true
-for CONTAINER in "${!CONTAINER_PORTS[@]}"; do
-  if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER}$"; then
-    ALL_CONTAINERS_UP=false
-  fi
-done
-
-if [ "$ALL_CONTAINERS_UP" = true ]; then
-  echo ""
-  success "All required Docker containers are running."
-else
-  echo ""
-  error "One or more required Docker containers are still not running!"
-  info "Check the errors above and fix them before starting ArkCase."
-fi
-
-
-cat > ~/training/apache-tomcat-9.0.117/bin/setenv.sh << 'EOF'
-export JAVA_OPTS="-Xms2g -Xmx4g -XX:MaxMetaspaceSize=512m"
-EOF
-
-# Make it executable
-chmod +x ~/training/apache-tomcat-9.0.117/bin/setenv.sh
-
-
-
-select 
-    per.cm_given_name || ' ' || per.cm_family_name as 'Person Name',
-    pa.cm_person_assoc_person_type as 'Role',
-    c.cm_complaint_title as 'Matter Name',
-    c.cm_complaint_number as 'Matter Number'
-from acm_complaint c
-    left join acm_person_assoc pa 
-        on pa.cm_person_assoc_parent_id = c.cm_complaint_id 
-        and pa.cm_person_assoc_parent_type = c.cm_object_type
-    left join acm_person per 
-        on per.cm_person_id = pa.cm_person_assoc_person_id
-
-select 
-    c.cm_complaint_title as 'Matter Name',
-    c.cm_complaint_number as 'Matter Number',
-    c.cm_complaint_created as 'Date Created',
-    p.cm_participant_ldap_id as 'Assignee'
-from acm_complaint c
-    join acm_participant p 
-        on p.cm_object_id = c.cm_complaint_id 
-        and p.cm_object_type = c.cm_object_type
-        and p.cm_participant_type = 'assignee'
-where c.cm_complaint_created >= DATE_SUB(CURDATE(), INTERVAL 30 DAY)
-
-
 # =====================================================================
-# MigrateFolderToCase.ps1
-# Copies a folder from your computer into an ArkCase case:
-#   - creates every subfolder (same as your folder-creation function)
-#   - uploads every file into its matching folder (same as UploadFile.ps1)
+# CreateCasesFromCsv.ps1   (create every spreadsheet row as a case file)
 # Windows PowerShell 5.1. Run with F5.
 #
-# ArkCase has no "upload a whole folder" API, so we walk the folder ourselves:
-#   for each folder: upload its files, then create each subfolder and repeat inside it.
+# Input : the migration sheet saved as CSV (File > Save As > "CSV UTF-8"), with its own headers:
+#         Case Type, Case Title, Case Subtype, Description, Received Date, Jurisdiction,
+#         Subject (Organization), Subject (Person First Name), Subject (Person Last Name),
+#         (fill EITHER the organization OR the person names - the script works out which)
+#         Assignee (Lead Investigator), Status, Source (Organization),
+#         Source (Person First Name), Source (Person Last Name), Partner Agency (Organization), Closing Date
+# Output: CaseMigrationLog.csv - one line per row, with the new case ID.
 #
-# Keeps going if something fails, and prints a summary at the end.
-# Use -WhatIf to see what WOULD happen without changing anything in ArkCase.
+# For each row:
+#   1. Find or create the SOURCE person and the SUBJECT person
+#   2. Create the case (source person = originator)   POST /api/v1/plugin/casefile
+#   3. Link the subject person                         POST /api/v1/service/objectassociations
+#   4. Log the result
+#
+# Each row is identified by its Case Title (the sheet has no ID column), so titles must be unique.
+# Safe to rerun: "Done" rows are skipped; if a case was created but the subject link failed,
+# the next run only retries the link (no duplicate case).
+# Dry run: .\CreateCasesFromCsv.ps1 -WhatIf   (looks people up, prints each body, creates nothing)
 # =====================================================================
 
 param(
-    [switch]$WhatIf      # dry run: list what would be created/uploaded, call nothing
+    [string]$CsvPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\CasesToMigrate.csv",
+    [string]$LogPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\CaseMigrationLog.csv",
+    [string]$KeyColumn = "Case Title",     # the column that identifies a row (change to a legacy-number column if you add one)
+    [switch]$WhatIf
 )
 
 # ---------- Setup ----------
 Import-Module V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\BriefcaseFunctions.psm1 -Force
-
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Add-Type -AssemblyName System.Net.Http
 
 $BaseUrl = $Global:StageUrl
 $Headers = @{ "Authorization" = "Bearer $Global:Token"; "Accept" = "application/json" }
 
-# HttpClient is only needed for uploadPart (form upload). Create it once and reuse it.
+# HttpClient: creating people needs a form upload (same as the ArkCase screen does)
 $Client = New-Object System.Net.Http.HttpClient
 $Client.DefaultRequestHeaders.Add("Authorization", "Bearer $Global:Token")
-$Client.Timeout = [TimeSpan]::FromMinutes(30)    # allow time for bigger files
-
-# Running totals and problems, for the summary at the end
-$script:FoldersCreated = 0
-$script:FilesUploaded  = 0
-$script:Failures       = New-Object System.Collections.Generic.List[string]
 
 
-# ---------- Helper: pull the clearest error message out of a failure ----------
+# ---------- Helpers ----------
 function Get-ErrorText {
     param($ErrorRecord)
     if ($ErrorRecord.ErrorDetails -and $ErrorRecord.ErrorDetails.Message) { return $ErrorRecord.ErrorDetails.Message }
     return $ErrorRecord.Exception.Message
 }
 
+# Sends JSON as UTF-8, so characters like the dash in "Vape Distribution – Retail" arrive intact
+function Invoke-JsonPost {
+    param([string]$Url, [string]$Json)
+    Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -Body ([System.Text.Encoding]::UTF8.GetBytes($Json)) -ContentType "application/json; charset=utf-8" -ErrorAction Stop
+}
 
-# ---------- Create one folder inside a parent folder ----------
-# PUT /api/v1/service/ecm/folder/{parentFolderId}/{folderName}
-# Returns the new folder's ID.
-function New-CaseFolder {
-    param([long]$ParentFolderId, [string]$FolderName)
-
-    $name   = [Uri]::EscapeDataString($FolderName)
-    $folder = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/ecm/folder/$ParentFolderId/$name" -Method Put -Headers $Headers -ErrorAction Stop
-    Return $folder.id
+# "10/28/2026" -> "2026-10-28T00:00:00.000Z"  (format from your case-file capture; blank -> $null)
+function ConvertTo-ArkDate {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $null }
+    return ([datetime]::Parse($Text)).ToString("yyyy-MM-dd") + "T00:00:00.000Z"
 }
 
 
-# ---------- Upload one file into a folder (the 3 steps from UploadFile.ps1) ----------
-function Send-FileToFolder {
-    param([long]$CaseId, [long]$FolderId, $File)
+# ---------- People: load once, find by name, create if missing ----------
+# Confirmed: person search returns "name" ("First Last") and "object_id_s".
+function Get-AllPersons {
+    $all = New-Object System.Collections.Generic.List[object]; $start = 0
+    do {
+        $resp = Invoke-RestMethod -Uri "$BaseUrl/api/latest/plugin/search/PERSON?start=$start&n=500" -Method Get -Headers $Headers -ErrorAction Stop
+        $docs = @($resp.response.docs); foreach ($d in $docs) { $all.Add($d) }
+        $total = [int]$resp.response.numFound; $start += 500
+    } while ($docs.Count -gt 0 -and $start -lt $total)
+    return ,$all
+}
 
-    # Step 1: beginUpload -> upload ID + ArkCase's plan (how many pieces, how big)
-    $name  = [Uri]::EscapeDataString($File.Name)
-    $begin = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/ecm/beginUpload?fileName=$name&fileSize=$($File.Length)&folderId=$FolderId&parentObjectId=$CaseId&parentObjectType=CASE_FILE" -Method Get -Headers $Headers -ErrorAction Stop
+function Find-PersonId {
+    param($Persons, [string]$FullName)
+    $wanted  = ($FullName -replace '\s+', ' ').Trim()
+    $matches = @($Persons | Where-Object { (([string]$_.name) -replace '\s+', ' ').Trim() -eq $wanted })
+    if ($matches.Count -eq 0) { return $null }
+    if ($matches.Count -gt 1) { throw "$($matches.Count) people are named '$wanted' - resolve the duplicate in ArkCase first." }
+    return [long]$matches[0].object_id_s
+}
 
-    $uploadId = [Uri]::EscapeDataString($begin.uploadId)
-    $numParts = [int]$begin.acmUploadPlan.numParts
-    $partSize = [long]$begin.acmUploadPlan.partSize
-    if ($numParts -lt 1) { $numParts = 1 }
-    if ($partSize -le 0) { $partSize = $File.Length }
+# Confirmed from your capture: POST /api/latest/plugin/people, form field "person" (file "blob") holding JSON
+function New-Person {
+    param([string]$FirstName, [string]$LastName)
+    $json = [ordered]@{
+        className = "com.armedia.acm.plugins.person.organization.model.Person"
+        contactMethods = @(); identifications = @(); addresses = @(); organizationAssociations = @()
+        defaultEmail = $null; defaultPhone = $null; defaultUrl = $null; defaultFax = $null
+        details = ""; familyName = $LastName; givenName = $FirstName
+    } | ConvertTo-Json -Depth 5
 
-    # Step 2: uploadPart, once per piece.
-    # Small files = 1 piece (tested and working).
-    # Large files = several pieces (NOT YET TESTED - try one large file on a test case first).
-    $stream = [System.IO.File]::OpenRead($File.FullName)
-    try {
-        for ($part = 1; $part -le $numParts; $part++) {
+    $form = New-Object System.Net.Http.MultipartFormDataContent
+    $part = New-Object System.Net.Http.StringContent($json, [System.Text.Encoding]::UTF8, "application/json")
+    $form.Add($part, '"person"', '"blob"')
 
-            # Read the next piece of the file
-            $size   = [int][Math]::Min($partSize, $File.Length - $stream.Position)
-            $buffer = New-Object byte[] $size
-            [void]$stream.Read($buffer, 0, $size)
+    $resp = $Client.PostAsync("$BaseUrl/api/latest/plugin/people", $form).Result
+    $text = $resp.Content.ReadAsStringAsync().Result
+    if (-not $resp.IsSuccessStatusCode) { throw "Creating person '$FirstName $LastName' failed: $([int]$resp.StatusCode) $text" }
+    $person = $text | ConvertFrom-Json
+    if (-not $person.id) { throw "Person '$FirstName $LastName' was sent but no ID came back - check ArkCase before rerunning." }
+    return [long]$person.id
+}
 
-            # Put it in a form under "partOfFile" (quotes needed for the Java server)
-            $form     = New-Object System.Net.Http.MultipartFormDataContent
-            $fileData = New-Object System.Net.Http.ByteArrayContent(,$buffer)
-            $form.Add($fileData, '"partOfFile"', '"' + $File.Name + '"')
+# Returns @{ Id; Name }: found, or created (in a dry run "would create" with Id 0)
+function Resolve-Person {
+    param($Persons, [string]$FirstName, [string]$LastName, [string]$Role)
 
-            $url  = "$BaseUrl/api/v1/service/ecm/uploadPart?uploadId=$uploadId&partNumber=$part&folderId=$FolderId&partSize=$size"
-            $resp = $Client.PutAsync($url, $form).Result
+    $first = ([string]$FirstName).Trim(); $last = ([string]$LastName).Trim()
+    if (-not $first -or -not $last) { throw "$Role first and last name are both required." }
+    $full = "$first $last"
 
-            # Stop this file if ArkCase refused the piece, so we never "complete" an empty or broken file
-            if (-not $resp.IsSuccessStatusCode) {
-                throw "uploadPart $part of $numParts failed: $([int]$resp.StatusCode) $($resp.Content.ReadAsStringAsync().Result)"
-            }
-        }
+    $id = Find-PersonId -Persons $Persons -FullName $full
+    if ($id) { Write-Host "  $($Role): $full (found, person $id)" }
+    elseif ($WhatIf) { Write-Host "  $($Role): $full (would create)" -ForegroundColor DarkGray; $id = 0 }
+    else {
+        $id = New-Person -FirstName $first -LastName $last
+        Write-Host "  $($Role): $full (created, person $id)" -ForegroundColor Green
+        # Remember them, so later rows with the same person reuse this ID (search can lag behind)
+        $Persons.Add([pscustomobject]@{ name = $full; object_id_s = $id })
     }
-    finally {
-        $stream.Dispose()    # always release the file
-    }
-
-    # Step 3: completeUpload -> ArkCase saves the file in the folder
-    $body = @{
-        uploadId         = $begin.uploadId
-        fileName         = $File.Name
-        originalFileName = $File.Name
-        parentObjectId   = $CaseId
-        parentObjectType = "CASE_FILE"
-        targetFolderId   = $FolderId
-    } | ConvertTo-Json
-
-    $done = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/ecm/completeUpload" -Method Post -Headers $Headers -Body $body -ContentType "application/json" -ErrorAction Stop
+    return @{ Id = [long]$id; Name = $full }
 }
 
 
-# ---------- The migration: copy one local folder's contents into one ArkCase folder ----------
-# Recursive, like New-FolderTree:
-#   1. upload the files in this folder
-#   2. for each subfolder: create it in ArkCase, then do the same inside it
-function Copy-FolderToCase {
-    param([long]$CaseId, [string]$LocalFolder, [long]$ArkFolderId, [string]$Indent = "")
+# ---------- Step 2: create the case ----------
+# Body from your working Swagger capture (case 175), with the sheet's values.
+function New-CaseFile {
+    param($Row, [long]$OriginatorId)
 
-    # 1. Files in this folder
-    foreach ($file in Get-ChildItem -LiteralPath $LocalFolder -File) {
-        if ($WhatIf) { Write-Host "$Indent[would upload] $($file.Name) ($($file.Length) bytes)"; continue }
+    # Columns the case form has no field for (yet) go on the end of the description, so nothing is lost
+    $extra = "Migrated data - Subject (Organization): $($Row.'Subject (Organization)'); " +
+             "Source (Organization): $($Row.'Source (Organization)'); Lead Investigator: $($Row.'Assignee (Lead Investigator)'); " +
+             "Status: $($Row.Status); Partner Agency: $($Row.'Partner Agency (Organization)'); Closing Date: $($Row.'Closing Date')"
 
-        try {
-            Send-FileToFolder -CaseId $CaseId -FolderId $ArkFolderId -File $file
-            $script:FilesUploaded++
-            Write-Host "$Indent[uploaded] $($file.Name)" -ForegroundColor Green
+    $body = [ordered]@{
+        className    = "gov.nysits.general.dto.NewNYSCaseFileDTO"
+        title        = $Row.'Case Title'
+        caseType     = $Row.'Case Type'           # e.g. DOHInvestigation
+        caseSubtype  = $Row.'Case Subtype'        # must match the drop-down exactly
+        jurisdiction = $Row.Jurisdiction          # must match the drop-down exactly
+        receivedDate = ConvertTo-ArkDate $Row.'Received Date'
+        details      = "<p>$($Row.Description)</p><p>$extra</p>"   # NOT YET CONFIRMED: "details" is the description field
+        originator   = [ordered]@{
+            personId   = $OriginatorId            # the SOURCE person (confirm this is what the business wants)
+            personType = "Initiator"
+            parentType = "CASE_FILE"
         }
-        catch {
-            $script:Failures.Add("FILE    $($file.FullName) - $(Get-ErrorText $_)")
-            Write-Host "$Indent[FAILED]   $($file.Name)" -ForegroundColor Red
-        }
-    }
+    } | ConvertTo-Json -Depth 5
 
-    # 2. Subfolders: create, then go inside
-    foreach ($dir in Get-ChildItem -LiteralPath $LocalFolder -Directory) {
-        if ($WhatIf) {
-            Write-Host "$Indent[would create folder] $($dir.Name)"
-            Copy-FolderToCase -CaseId $CaseId -LocalFolder $dir.FullName -ArkFolderId 0 -Indent "$Indent    "
-            continue
-        }
-
-        try {
-            $newId = New-CaseFolder -ParentFolderId $ArkFolderId -FolderName $dir.Name
-            $script:FoldersCreated++
-            Write-Host "$Indent[folder]   $($dir.Name) (ID $newId)" -ForegroundColor Cyan
-        }
-        catch {
-            # Folder failed (e.g. it already exists): skip it and everything inside, keep going
-            $script:Failures.Add("FOLDER  $($dir.FullName) - $(Get-ErrorText $_) (its contents were skipped)")
-            Write-Host "$Indent[FAILED]   folder $($dir.Name) - skipping its contents" -ForegroundColor Red
-            continue
-        }
-
-        Copy-FolderToCase -CaseId $CaseId -LocalFolder $dir.FullName -ArkFolderId $newId -Indent "$Indent    "
-    }
+    if ($WhatIf) { Write-Host "  [would create case]`n$body" -ForegroundColor DarkGray; return $null }
+    return Invoke-JsonPost -Url "$BaseUrl/api/v1/plugin/casefile" -Json $body
 }
 
 
-# ---------- Run ----------
-$CaseId      = Read-Host "Enter the case ID"
-$LocalFolder = (Read-Host "Enter the full path of the folder to migrate").Trim('"')
+# ---------- Work out whether the subject is a person or an organization ----------
+# Organization filled, person names blank -> "ORGANIZATION"
+# Person names filled, organization blank -> "PERSON"
+# Both filled, or both blank              -> error (thrown before anything is created)
+function Get-SubjectType {
+    param($Row)
 
-if (-not (Test-Path -LiteralPath $LocalFolder -PathType Container)) {
-    Write-Host "Folder not found: $LocalFolder" -ForegroundColor Red
+    $org       = ([string]$Row.'Subject (Organization)').Trim()
+    $first     = ([string]$Row.'Subject (Person First Name)').Trim()
+    $last      = ([string]$Row.'Subject (Person Last Name)').Trim()
+    $hasPerson = [bool]($first -or $last)
+
+    if ($org -and $hasPerson)     { throw "Subject has both an organization and a person - fill in only one." }
+    if (-not $org -and -not $hasPerson) { throw "Subject is empty - fill in either Subject (Organization) or the subject person's names." }
+    if ($org) { return "ORGANIZATION" }
+    if (-not ($first -and $last)) { throw "Subject person needs both a first and a last name." }
+    return "PERSON"
+}
+
+
+# ---------- Step 3: link the subject (person, or later organization) ----------
+# Body from your captured SUBJECT association (case 175 -> person 115).
+function Add-CaseSubject {
+    param([long]$CaseId, [string]$CaseTitle, [long]$PersonId, [string]$PersonName, [string]$TargetType = "PERSON")
+
+    $body = [ordered]@{
+        parentId           = $CaseId
+        parentType         = "CASE_FILE"
+        parentTitle        = $CaseTitle
+        associationType    = "SUBJECT"
+        targetId           = $PersonId
+        targetType         = $TargetType
+        targetTitle        = $null
+        targetName         = $PersonName
+        inverseAssociation = [ordered]@{          # the same link, seen from the person's side
+            parentId        = $PersonId
+            parentType      = $TargetType
+            parentTitle     = $null
+            parentName      = $PersonName
+            associationType = "SUBJECT"
+            targetId        = $CaseId
+            targetType      = "CASE_FILE"
+            targetTitle     = $CaseTitle
+        }
+    } | ConvertTo-Json -Depth 5
+
+    if ($WhatIf) { Write-Host "  [would link subject]`n$body" -ForegroundColor DarkGray; return }
+    Invoke-JsonPost -Url "$BaseUrl/api/v1/service/objectassociations" -Json $body | Out-Null
+    Write-Host "  subject linked" -ForegroundColor Green
+}
+
+
+# =====================================================================
+# Run
+# =====================================================================
+if (-not (Test-Path -LiteralPath $CsvPath)) { Write-Host "Not found: $CsvPath" -ForegroundColor Red; return }
+$rows = @(Import-Csv -LiteralPath $CsvPath -Encoding UTF8 | Where-Object { $_.$KeyColumn })
+Write-Host "Read $($rows.Count) row(s) from $CsvPath" -ForegroundColor Cyan
+
+# The key column must be unique, or reruns can't tell rows apart
+$dupes = @($rows | Group-Object { $_.$KeyColumn.Trim() } | Where-Object { $_.Count -gt 1 })
+if ($dupes.Count -gt 0) {
+    Write-Host "These '$KeyColumn' values appear more than once - make them unique first:" -ForegroundColor Red
+    $dupes | ForEach-Object { Write-Host "  $($_.Name) ($($_.Count) rows)" -ForegroundColor Red }
     return
 }
+if ($WhatIf) { Write-Host "DRY RUN - nothing will be created." -ForegroundColor Yellow }
 
-$top = Get-Item -LiteralPath $LocalFolder
-if ($WhatIf) { Write-Host "DRY RUN - nothing will be created or uploaded." -ForegroundColor Yellow }
-
-try {
-    # Find the case's main folder: GET /api/v1/service/ecm/folder/CASE_FILE/{caseId}
-    $root = Invoke-RestMethod -Uri "$BaseUrl/api/v1/service/ecm/folder/CASE_FILE/$CaseId" -Method Get -Headers $Headers -ErrorAction Stop
-
-    # Create the top folder itself (e.g. "DHR") inside the case's main folder, then copy into it
-    if ($WhatIf) {
-        Write-Host "[would create folder] $($top.Name)"
-        Copy-FolderToCase -CaseId $CaseId -LocalFolder $top.FullName -ArkFolderId 0 -Indent "    "
-    }
-    else {
-        $topId = New-CaseFolder -ParentFolderId $root.folderId -FolderName $top.Name
-        $script:FoldersCreated++
-        Write-Host "[folder]   $($top.Name) (ID $topId)" -ForegroundColor Cyan
-        Copy-FolderToCase -CaseId $CaseId -LocalFolder $top.FullName -ArkFolderId $topId -Indent "    "
-    }
-}
-catch {
-    Write-Host "Could not start: $(Get-ErrorText $_)" -ForegroundColor Red
+# Previous results, so reruns skip finished rows and never create a case twice
+$log = @{}
+if (Test-Path -LiteralPath $LogPath) {
+    foreach ($e in Import-Csv -LiteralPath $LogPath -Encoding UTF8) { $log[$e.Key] = $e }
 }
 
-# ---------- Summary ----------
+Write-Host "Loading people from ArkCase..." -ForegroundColor Cyan
+try   { $persons = Get-AllPersons; Write-Host "Loaded $($persons.Count) people." -ForegroundColor Cyan }
+catch { Write-Host "Could not load people: $(Get-ErrorText $_)" -ForegroundColor Red; return }
+
+$done = 0; $failed = 0; $skipped = 0
+
+foreach ($row in $rows) {
+    $key      = $row.$KeyColumn.Trim()
+    $previous = $log[$key]
+    Write-Host ""
+    Write-Host "[$key]"
+
+    if ($previous -and $previous.Status -eq "Done") {
+        Write-Host "  already done (case $($previous.CaseId)) - skipping" -ForegroundColor DarkGray
+        $skipped++; continue
+    }
+
+    $result = [ordered]@{
+        Key = $key; CaseId = ""; CaseNumber = ""; SubjectPersonId = ""; SourcePersonId = ""
+        SheetStatus = $row.Status; Status = ""; Error = ""; Time = (Get-Date).ToString("s")
+    }
+
+    try {
+        # 1. Work out the subject type first, so a bad row creates nothing at all
+        $subjectType = Get-SubjectType -Row $row
+        Write-Host "  subject type: $subjectType"
+        if ($subjectType -eq "ORGANIZATION") {
+            throw "Organization subjects aren't supported yet - waiting on the organization API capture. Row skipped, nothing created."
+        }
+
+        # 2. People
+        $source  = Resolve-Person -Persons $persons -FirstName $row.'Source (Person First Name)'  -LastName $row.'Source (Person Last Name)'  -Role "source"
+        $subject = Resolve-Person -Persons $persons -FirstName $row.'Subject (Person First Name)' -LastName $row.'Subject (Person Last Name)' -Role "subject"
+        $result.SourcePersonId = $source.Id; $result.SubjectPersonId = $subject.Id
+
+        # 2. Case - unless an earlier run already created it
+        if ($previous -and $previous.CaseId) {
+            $caseId = [long]$previous.CaseId; $result.CaseNumber = $previous.CaseNumber
+            Write-Host "  case already created earlier (ID $caseId) - only retrying the subject link" -ForegroundColor Yellow
+        }
+        else {
+            $case = New-CaseFile -Row $row -OriginatorId $source.Id
+            if ($WhatIf) { $caseId = 0 }
+            else {
+                # NOT YET CONFIRMED: the new case ID comes back as "id"
+                $caseId = if ($case.id) { [long]$case.id } else { [long]$case.caseId }
+                if ($caseId -le 0) { throw "Case was sent but no ID came back - check ArkCase before rerunning." }
+                $result.CaseNumber = $case.caseNumber
+                Write-Host "  case created: ID $caseId $($case.caseNumber)" -ForegroundColor Green
+            }
+        }
+        $result.CaseId = $caseId
+
+        # 3. Subject link
+        Add-CaseSubject -CaseId $caseId -CaseTitle $row.'Case Title' -PersonId $subject.Id -PersonName $subject.Name
+
+        $result.Status = if ($WhatIf) { "DryRun" } else { "Done" }
+        $done++
+    }
+    catch {
+        # "CaseCreated-SubjectFailed" means the next run only retries the link
+        $result.Status = if ($result.CaseId) { "CaseCreated-SubjectFailed" } else { "Failed" }
+        $result.Error  = Get-ErrorText $_
+        Write-Host "  FAILED: $($result.Error)" -ForegroundColor Red
+        $failed++
+    }
+
+    # 4. Save this row's result straight away
+    if (-not $WhatIf) {
+        $log[$key] = [pscustomobject]$result
+        $log.Values | Export-Csv -LiteralPath $LogPath -NoTypeInformation -Encoding UTF8
+    }
+}
+
 Write-Host ""
-if (-not $WhatIf) {
-    Write-Host "Done. Folders created: $($script:FoldersCreated). Files uploaded: $($script:FilesUploaded)." -ForegroundColor Cyan
-}
-if ($script:Failures.Count -gt 0) {
-    Write-Host "$($script:Failures.Count) problem(s):" -ForegroundColor Yellow
-    $script:Failures | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
-}
-
+Write-Host "Finished. Done: $done   Failed: $failed   Already done: $skipped" -ForegroundColor Cyan
+if (-not $WhatIf) { Write-Host "Results saved to $LogPath" -ForegroundColor Cyan }
 $Client.Dispose()
-
-
-
-
-
-
-
-
