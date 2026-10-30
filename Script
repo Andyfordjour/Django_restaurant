@@ -26,6 +26,7 @@ param(
     [string]$CsvPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\CasesToMigrate.csv",
     [string]$LogPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\CaseMigrationLog.csv",
     [string]$KeyColumn = "Case Title",     # the column that identifies a row (change to a legacy-number column if you add one)
+    [string]$DefaultCaseType = "DOHInvestigation",   # used when the Case Type column is blank or missing
     [switch]$WhatIf
 )
 
@@ -140,7 +141,7 @@ function New-CaseFile {
     $body = [ordered]@{
         className    = "gov.nysits.general.dto.NewNYSCaseFileDTO"
         title        = $Row.'Case Title'
-        caseType     = $Row.'Case Type'           # e.g. DOHInvestigation
+        caseType     = if ($Row.'Case Type') { $Row.'Case Type' } else { $DefaultCaseType }   # blank/missing -> default
         caseSubtype  = $Row.'Case Subtype'        # must match the drop-down exactly
         jurisdiction = $Row.Jurisdiction          # must match the drop-down exactly
         receivedDate = ConvertTo-ArkDate $Row.'Received Date'
