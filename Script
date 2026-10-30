@@ -13,12 +13,15 @@
 # For each row:
 #   1. Find or create the SOURCE person and the SUBJECT person
 #   2. Create the case (source person = originator)   POST /api/v1/plugin/casefile
-#   3. Link the subject person                         POST /api/v1/service/objectassociations
+#   3. Link the source (ORIGINATING_SOURCE) and the subject (SUBJECT)
+#                                                      POST /api/v1/service/objectassociations
+#   Subject and Source: fill EITHER the organization OR the person names.
+#   People and organizations are found by name, or created if they don't exist yet.
 #   4. Log the result
 #
 # Each row is identified by its Case Title (the sheet has no ID column), so titles must be unique.
-# Safe to rerun: "Done" rows are skipped; if a case was created but the subject link failed,
-# the next run only retries the link (no duplicate case).
+# Safe to rerun: "Done" rows are skipped; if a case was created but a link failed,
+# the next run only retries the missing link(s) (no duplicate case, no duplicate link).
 # Dry run: .\CreateCasesFromCsv.ps1 -WhatIf   (looks people up, prints each body, creates nothing)
 # =====================================================================
 
@@ -27,6 +30,8 @@ param(
     [string]$LogPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\CaseMigrationLog.csv",
     [string]$KeyColumn = "Case Title",     # the column that identifies a row (change to a legacy-number column if you add one)
     [string]$DefaultCaseType = "DOHInvestigation",   # used when the Case Type column is blank or missing
+    [string]$OrganizationType = $null,               # type given to NEW organizations (e.g. "Corporation"); blank = none
+    [long]$DefaultOriginatorPersonId = 0,            # originator when the Source is an organization (cases need a person)
     [switch]$WhatIf
 )
 
@@ -93,15 +98,18 @@ function New-Person {
         contactMethods = @(); identifications = @(); addresses = @(); organizationAssociations = @()
         defaultEmail = $null; defaultPhone = $null; defaultUrl = $null; defaultFax = $null
         details = ""; familyName = $LastName; givenName = $FirstName
-    } | ConvertTo-Json -Depth 5
+    } | ConvertTo-Json -Depth 5 -Compress      # one line, like the browser sends it
 
-    $form = New-Object System.Net.Http.MultipartFormDataContent
-    $part = New-Object System.Net.Http.StringContent($json, [System.Text.Encoding]::UTF8, "application/json")
+    # Build the form part exactly like the browser: raw UTF-8 bytes, Content-Type "application/json" (no charset)
+    $form  = New-Object System.Net.Http.MultipartFormDataContent
+    $bytes = [System.Text.Encoding]::UTF8.GetBytes($json)
+    $part  = [System.Net.Http.ByteArrayContent]::new($bytes)   # ::new passes the bytes as ONE value
+    $part.Headers.ContentType = [System.Net.Http.Headers.MediaTypeHeaderValue]::Parse("application/json")
     $form.Add($part, '"person"', '"blob"')
 
     $resp = $Client.PostAsync("$BaseUrl/api/latest/plugin/people", $form).Result
     $text = $resp.Content.ReadAsStringAsync().Result
-    if (-not $resp.IsSuccessStatusCode) { throw "Creating person '$FirstName $LastName' failed: $([int]$resp.StatusCode) $text" }
+    if (-not $resp.IsSuccessStatusCode) { throw "Creating person '$FirstName $LastName' failed: $([int]$resp.StatusCode) $text`n  Sent: $json" }
     $person = $text | ConvertFrom-Json
     if (-not $person.id) { throw "Person '$FirstName $LastName' was sent but no ID came back - check ArkCase before rerunning." }
     return [long]$person.id
@@ -124,7 +132,68 @@ function Resolve-Person {
         # Remember them, so later rows with the same person reuse this ID (search can lag behind)
         $Persons.Add([pscustomobject]@{ name = $full; object_id_s = $id })
     }
-    return @{ Id = [long]$id; Name = $full }
+    return @{ Id = [long]$id; Name = $full; TargetType = "PERSON" }
+}
+
+
+# ---------- Organizations: same logic as people - load once, find by name, create if missing ----------
+# NOT YET CONFIRMED: organization search works like person search ("name" + "object_id_s").
+function Get-AllOrganizations {
+    $all = New-Object System.Collections.Generic.List[object]; $start = 0
+    do {
+        $resp = Invoke-RestMethod -Uri "$BaseUrl/api/latest/plugin/search/ORGANIZATION?start=$start&n=500" -Method Get -Headers $Headers -ErrorAction Stop
+        $docs = @($resp.response.docs); foreach ($d in $docs) { $all.Add($d) }
+        $total = [int]$resp.response.numFound; $start += 500
+    } while ($docs.Count -gt 0 -and $start -lt $total)
+    return ,$all
+}
+
+function Find-OrganizationId {
+    param($Organizations, [string]$Name)
+    $wanted  = ($Name -replace '\s+', ' ').Trim()
+    $matches = @($Organizations | Where-Object { (([string]$_.name) -replace '\s+', ' ').Trim() -eq $wanted })
+    if ($matches.Count -eq 0) { return $null }
+    if ($matches.Count -gt 1) { throw "$($matches.Count) organizations are named '$wanted' - resolve the duplicate in ArkCase first." }
+    return [long]$matches[0].object_id_s
+}
+
+# Confirmed from your capture: POST /api/latest/plugin/organizations, plain JSON.
+# The new ID comes back as "organizationId" (seen in your response capture).
+function New-Organization {
+    param([string]$Name)
+    $body = [ordered]@{
+        className          = "com.armedia.acm.plugins.person.organization.model.Organization"
+        organizationValue  = $Name                 # the organization's name
+        organizationType   = $(if ($OrganizationType) { $OrganizationType } else { $null })
+        addresses          = @()
+        contactMethods     = @()
+        identifications    = @()
+        personAssociations = @()                   # contact person is optional
+        defaultEmail = $null; defaultFax = $null; defaultPhone = $null; defaultUrl = $null
+        details            = ""
+        modified           = $null
+    } | ConvertTo-Json -Depth 5
+
+    $org = Invoke-JsonPost -Url "$BaseUrl/api/latest/plugin/organizations" -Json $body
+    if (-not $org.organizationId) { throw "Organization '$Name' was sent but no ID came back - check ArkCase before rerunning." }
+    return [long]$org.organizationId
+}
+
+# Returns @{ Id; Name; TargetType }: found, or created (in a dry run "would create" with Id 0)
+function Resolve-Organization {
+    param($Organizations, [string]$Name, [string]$Role)
+
+    $name = ([string]$Name).Trim()
+    $id = Find-OrganizationId -Organizations $Organizations -Name $name
+    if ($id) { Write-Host "  $($Role): $name (found, organization $id)" }
+    elseif ($WhatIf) { Write-Host "  $($Role): $name (would create organization)" -ForegroundColor DarkGray; $id = 0 }
+    else {
+        $id = New-Organization -Name $name
+        Write-Host "  $($Role): $name (created, organization $id)" -ForegroundColor Green
+        # Remember it, so later rows with the same organization reuse this ID
+        $Organizations.Add([pscustomobject]@{ name = $name; object_id_s = $id })
+    }
+    return @{ Id = [long]$id; Name = $name; TargetType = "ORGANIZATION" }
 }
 
 
@@ -158,36 +227,38 @@ function New-CaseFile {
 }
 
 
-# ---------- Work out whether the subject is a person or an organization ----------
+# ---------- Work out whether the Subject / Source is a person or an organization ----------
+# $Prefix is "Subject" or "Source" (matches the column names).
 # Organization filled, person names blank -> "ORGANIZATION"
 # Person names filled, organization blank -> "PERSON"
 # Both filled, or both blank              -> error (thrown before anything is created)
-function Get-SubjectType {
-    param($Row)
+function Get-PartyType {
+    param($Row, [string]$Prefix)
 
-    $org       = ([string]$Row.'Subject (Organization)').Trim()
-    $first     = ([string]$Row.'Subject (Person First Name)').Trim()
-    $last      = ([string]$Row.'Subject (Person Last Name)').Trim()
+    $org       = ([string]$Row."$Prefix (Organization)").Trim()
+    $first     = ([string]$Row."$Prefix (Person First Name)").Trim()
+    $last      = ([string]$Row."$Prefix (Person Last Name)").Trim()
     $hasPerson = [bool]($first -or $last)
 
-    if ($org -and $hasPerson)     { throw "Subject has both an organization and a person - fill in only one." }
-    if (-not $org -and -not $hasPerson) { throw "Subject is empty - fill in either Subject (Organization) or the subject person's names." }
+    if ($org -and $hasPerson)           { throw "$Prefix has both an organization and a person - fill in only one." }
+    if (-not $org -and -not $hasPerson) { throw "$Prefix is empty - fill in either $Prefix (Organization) or the $Prefix person's names." }
     if ($org) { return "ORGANIZATION" }
-    if (-not ($first -and $last)) { throw "Subject person needs both a first and a last name." }
+    if (-not ($first -and $last))       { throw "$Prefix person needs both a first and a last name." }
     return "PERSON"
 }
 
 
-# ---------- Step 3: link the subject (person, or later organization) ----------
-# Body from your captured SUBJECT association (case 175 -> person 115).
-function Add-CaseSubject {
-    param([long]$CaseId, [string]$CaseTitle, [long]$PersonId, [string]$PersonName, [string]$TargetType = "PERSON")
+# ---------- Step 3: link a person (or later an organization) to the case ----------
+# $LinkType: "SUBJECT" (from your case-file capture) or "ORIGINATING_SOURCE" (same shape, from your matter capture)
+function Add-CaseLink {
+    param([long]$CaseId, [string]$CaseTitle, [long]$PersonId, [string]$PersonName,
+          [string]$LinkType, [string]$TargetType = "PERSON")
 
     $body = [ordered]@{
         parentId           = $CaseId
         parentType         = "CASE_FILE"
         parentTitle        = $CaseTitle
-        associationType    = "SUBJECT"
+        associationType    = $LinkType
         targetId           = $PersonId
         targetType         = $TargetType
         targetTitle        = $null
@@ -197,16 +268,16 @@ function Add-CaseSubject {
             parentType      = $TargetType
             parentTitle     = $null
             parentName      = $PersonName
-            associationType = "SUBJECT"
+            associationType = $LinkType
             targetId        = $CaseId
             targetType      = "CASE_FILE"
             targetTitle     = $CaseTitle
         }
     } | ConvertTo-Json -Depth 5
 
-    if ($WhatIf) { Write-Host "  [would link subject]`n$body" -ForegroundColor DarkGray; return }
+    if ($WhatIf) { Write-Host "  [would link $LinkType]`n$body" -ForegroundColor DarkGray; return }
     Invoke-JsonPost -Url "$BaseUrl/api/v1/service/objectassociations" -Json $body | Out-Null
-    Write-Host "  subject linked" -ForegroundColor Green
+    Write-Host "  linked $LinkType" -ForegroundColor Green
 }
 
 
@@ -232,9 +303,24 @@ if (Test-Path -LiteralPath $LogPath) {
     foreach ($e in Import-Csv -LiteralPath $LogPath -Encoding UTF8) { $log[$e.Key] = $e }
 }
 
-Write-Host "Loading people from ArkCase..." -ForegroundColor Cyan
-try   { $persons = Get-AllPersons; Write-Host "Loaded $($persons.Count) people." -ForegroundColor Cyan }
-catch { Write-Host "Could not load people: $(Get-ErrorText $_)" -ForegroundColor Red; return }
+Write-Host "Loading people and organizations from ArkCase..." -ForegroundColor Cyan
+try   {
+    $persons = Get-AllPersons;       Write-Host "Loaded $($persons.Count) people." -ForegroundColor Cyan
+    $orgs    = Get-AllOrganizations; Write-Host "Loaded $($orgs.Count) organizations." -ForegroundColor Cyan
+}
+catch { Write-Host "Could not load people/organizations: $(Get-ErrorText $_)" -ForegroundColor Red; return }
+
+# Finds or creates the Subject / Source: a person or an organization, depending on the columns filled
+function Resolve-Party {
+    param($Row, [string]$Prefix, [string]$Type)
+    if ($Type -eq "ORGANIZATION") {
+        return Resolve-Organization -Organizations $orgs -Name $Row."$Prefix (Organization)" -Role $Prefix.ToLower()
+    }
+    return Resolve-Person -Persons $persons -FirstName $Row."$Prefix (Person First Name)" -LastName $Row."$Prefix (Person Last Name)" -Role $Prefix.ToLower()
+}
+
+# Fixed log columns, so old and new log lines always line up in the CSV
+$LogColumns = "Key","CaseId","CaseNumber","SubjectType","SubjectId","SourceType","SourceId","LinksDone","SheetStatus","Status","Error","Time"
 
 $done = 0; $failed = 0; $skipped = 0
 
@@ -249,31 +335,39 @@ foreach ($row in $rows) {
         $skipped++; continue
     }
 
+    # LinksDone remembers which links already succeeded, so a retry never adds the same link twice
     $result = [ordered]@{
-        Key = $key; CaseId = ""; CaseNumber = ""; SubjectPersonId = ""; SourcePersonId = ""
+        Key = $key; CaseId = ""; CaseNumber = ""
+        SubjectType = ""; SubjectId = ""; SourceType = ""; SourceId = ""
+        LinksDone = $(if ($previous) { [string]$previous.LinksDone } else { "" })
         SheetStatus = $row.Status; Status = ""; Error = ""; Time = (Get-Date).ToString("s")
     }
 
     try {
-        # 1. Work out the subject type first, so a bad row creates nothing at all
-        $subjectType = Get-SubjectType -Row $row
-        Write-Host "  subject type: $subjectType"
-        if ($subjectType -eq "ORGANIZATION") {
-            throw "Organization subjects aren't supported yet - waiting on the organization API capture. Row skipped, nothing created."
+        # 1. Work out Subject and Source types first, so a bad row creates nothing at all
+        $subjectType = Get-PartyType -Row $row -Prefix "Subject"
+        $sourceType  = Get-PartyType -Row $row -Prefix "Source"
+        $result.SubjectType = $subjectType; $result.SourceType = $sourceType
+        Write-Host "  subject type: $subjectType   source type: $sourceType"
+
+        # A case needs a PERSON as originator. If the source is an organization, use the default originator.
+        if ($sourceType -eq "ORGANIZATION" -and $DefaultOriginatorPersonId -le 0) {
+            throw "Source is an organization, so the case needs a default originator person - run with -DefaultOriginatorPersonId <person ID>. Row skipped, nothing created."
         }
 
-        # 2. People
-        $source  = Resolve-Person -Persons $persons -FirstName $row.'Source (Person First Name)'  -LastName $row.'Source (Person Last Name)'  -Role "source"
-        $subject = Resolve-Person -Persons $persons -FirstName $row.'Subject (Person First Name)' -LastName $row.'Subject (Person Last Name)' -Role "subject"
-        $result.SourcePersonId = $source.Id; $result.SubjectPersonId = $subject.Id
+        # 2. Subject and Source: find them, or create them if missing (people AND organizations)
+        $source  = Resolve-Party -Row $row -Prefix "Source"  -Type $sourceType
+        $subject = Resolve-Party -Row $row -Prefix "Subject" -Type $subjectType
+        $result.SourceId = $source.Id; $result.SubjectId = $subject.Id
+        $originatorId = if ($sourceType -eq "PERSON") { $source.Id } else { $DefaultOriginatorPersonId }
 
-        # 2. Case - unless an earlier run already created it
+        # 3. Case - unless an earlier run already created it
         if ($previous -and $previous.CaseId) {
             $caseId = [long]$previous.CaseId; $result.CaseNumber = $previous.CaseNumber
-            Write-Host "  case already created earlier (ID $caseId) - only retrying the subject link" -ForegroundColor Yellow
+            Write-Host "  case already created earlier (ID $caseId) - only retrying the missing links" -ForegroundColor Yellow
         }
         else {
-            $case = New-CaseFile -Row $row -OriginatorId $source.Id
+            $case = New-CaseFile -Row $row -OriginatorId $originatorId
             if ($WhatIf) { $caseId = 0 }
             else {
                 # NOT YET CONFIRMED: the new case ID comes back as "id"
@@ -285,15 +379,24 @@ foreach ($row in $rows) {
         }
         $result.CaseId = $caseId
 
-        # 3. Subject link
-        Add-CaseSubject -CaseId $caseId -CaseTitle $row.'Case Title' -PersonId $subject.Id -PersonName $subject.Name
+        # 4. Links (same order as the ArkCase screen: originating source, then subject).
+        #    Each one is skipped if an earlier run already made it.
+        $links = @(
+            @{ Type = "ORIGINATING_SOURCE"; Party = $source  },
+            @{ Type = "SUBJECT";            Party = $subject }
+        )
+        foreach ($link in $links) {
+            if ($result.LinksDone -split ';' -contains $link.Type) { Write-Host "  $($link.Type) already linked earlier" -ForegroundColor DarkGray; continue }
+            Add-CaseLink -CaseId $caseId -CaseTitle $row.'Case Title' -PersonId $link.Party.Id -PersonName $link.Party.Name -LinkType $link.Type -TargetType $link.Party.TargetType
+            if (-not $WhatIf) { $result.LinksDone = (@($result.LinksDone -split ';' | Where-Object { $_ }) + $link.Type) -join ';' }
+        }
 
         $result.Status = if ($WhatIf) { "DryRun" } else { "Done" }
         $done++
     }
     catch {
-        # "CaseCreated-SubjectFailed" means the next run only retries the link
-        $result.Status = if ($result.CaseId) { "CaseCreated-SubjectFailed" } else { "Failed" }
+        # "CaseCreated-LinkFailed" means the next run only retries the missing links
+        $result.Status = if ($result.CaseId) { "CaseCreated-LinkFailed" } else { "Failed" }
         $result.Error  = Get-ErrorText $_
         Write-Host "  FAILED: $($result.Error)" -ForegroundColor Red
         $failed++
@@ -302,7 +405,7 @@ foreach ($row in $rows) {
     # 4. Save this row's result straight away
     if (-not $WhatIf) {
         $log[$key] = [pscustomobject]$result
-        $log.Values | Export-Csv -LiteralPath $LogPath -NoTypeInformation -Encoding UTF8
+        $log.Values | Select-Object $LogColumns | Export-Csv -LiteralPath $LogPath -NoTypeInformation -Encoding UTF8
     }
 }
 
