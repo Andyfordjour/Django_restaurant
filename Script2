@@ -465,12 +465,25 @@ try   {
 }
 catch { Write-Host "Could not load people/organizations: $(Get-ErrorText $_)" -ForegroundColor Red; return }
 
+# Read a column even if its header is written slightly differently.
+# Spaces, brackets and capitals are ignored, so "Subject(Organization Type)",
+# "Subject (Organization Type)" and "Subject Organization Type" all count as the same column.
+function Get-RowValue {
+    param($Row, [string]$ColumnName)
+    $wanted = ($ColumnName -replace '[^A-Za-z0-9]', '').ToLower()
+    foreach ($p in $Row.PSObject.Properties) {
+        if (($p.Name -replace '[^A-Za-z0-9]', '').ToLower() -eq $wanted) { return [string]$p.Value }
+    }
+    return ""
+}
+
 # Find or create the Subject / Source - calls the person version or the organization version
 function Resolve-Party {
     param($Row, [string]$Prefix, [string]$Type)
     if ($Type -eq "ORGANIZATION") {
-        # The type comes from the "Subject Organization Type" / "Source Organization Type" column
-        return Resolve-Organization -Organizations $orgs -Name $Row."$Prefix (Organization)" -Role $Prefix.ToLower() -Type $Row."$Prefix Organization Type"
+        # The type comes from the "Subject (Organization Type)" / "Source (Organization Type)" column
+        $type = Get-RowValue -Row $Row -ColumnName "$Prefix Organization Type"
+        return Resolve-Organization -Organizations $orgs -Name $Row."$Prefix (Organization)" -Role $Prefix.ToLower() -Type $type
     }
     return Resolve-Person -Persons $persons -FirstName $Row."$Prefix (Person First Name)" -LastName $Row."$Prefix (Person Last Name)" -Role $Prefix.ToLower()
 }
@@ -610,4 +623,3 @@ Write-Host ""
 Write-Host "Finished. Done: $done   Failed: $failed   Already done: $skipped" -ForegroundColor Cyan
 if (-not $WhatIf) { Write-Host "Results saved to $LogPath" -ForegroundColor Cyan }
 $Client.Dispose()
-
