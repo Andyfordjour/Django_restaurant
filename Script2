@@ -1,1 +1,473 @@
+# =====================================================================
+# CreateCasesFromCsv.ps1   (this is the file you run)
+#
+# WHAT IT DOES
+#   Reads the migration spreadsheet and creates one ArkCase case for each row.
+#   For each case it also:
+#     - adds the Subject and the Originating Source (a person or an organization)
+#     - adds the Partner Agency (an organization), if the row has one
+#     - assigns the case to the Lead Investigator
+#   People and organizations that don't exist in ArkCase yet are created.
+#
+# FILES
+#   CreateCasesFromCsv.ps1  the migration rules and the main part (this file)
+#   Functions.psm1          the ArkCase API calls (the "CASE MIGRATION" section at its end)
+#
+# BEFORE YOU RUN IT
+#   - Save the spreadsheet from Excel as "CSV UTF-8".
+#   - Every Case Title must be different (the script uses it to recognise each row).
+#   - For Subject and for Source, fill in EITHER the organization OR the person's names, not both.
+#   - Subject / Source / Partner Agency "(Organization Type)" columns: Government, Corporation,
+#     Non-profit or Unknown. Blank (or anything else) = Unknown.
+#
+# HOW TO RUN IT
+#   Test first (nothing is created):   .\CreateCasesFromCsv.ps1 -WhatIf
+#   Real run:                          .\CreateCasesFromCsv.ps1
+#
+# RESULTS
+#   Every row is written to CaseMigrationLog.csv as soon as it finishes.
+#   It is safe to run the script again: finished rows are skipped, and a row that
+#   stopped halfway only finishes what's missing (nothing is created twice).
+# =====================================================================
+
+# ----- Settings you can change when running the script -----
+param(
+    # The module that holds the ArkCase API calls (and $Global:StageUrl / $Global:Token)
+    [string]$ModulePath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\Functions.psm1",
+
+    # Where the spreadsheet (CSV) is
+    [string]$CsvPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\CasesToMigrate.csv",
+
+    # Where the results log is saved
+    [string]$LogPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\CaseMigrationLog.csv",
+
+    # The column that tells rows apart (must be unique for every row)
+    [string]$KeyColumn = "Case Title",
+
+    # Case Type to use when that column is empty
+    [string]$DefaultCaseType = "DOHInvestigation",
+
+    # Type given to NEW organizations when the sheet's type cell is blank or not a valid option
+    [string]$OrganizationType = "Unknown",
+
+    # A case needs a PERSON as its originator. When the Source is an organization,
+    # this person's ID is used instead. 0 = not set (those rows will be skipped).
+    [long]$DefaultOriginatorPersonId = 0,
+
+    # The name ArkCase uses for a Partner Agency link
+    [string]$PartnerAgencyLinkType = "PARTNER_AGENCY",
+
+    # Lead Investigator names are turned into logins like "john.doe@its.ny.gov"
+    [string]$LoginDomain = "its.ny.gov",
+
+    # Add -WhatIf to test: shows what would happen, creates nothing
+    [switch]$WhatIf
+)
+
+
+# =====================================================================
+# SETUP
+# =====================================================================
+
+# Turn on the secure connection type the server needs
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+# Load .NET's web tools. New-Person (in the module) needs them to send people as a form.
+Add-Type -AssemblyName System.Net.Http
+
+# Load the module with the ArkCase API calls (also sets $Global:StageUrl and $Global:Token)
+Import-Module $ModulePath -Force
+
+# Stop early if the module didn't give us a server address and token
+if ([string]::IsNullOrWhiteSpace($Global:StageUrl)) { Write-Host "StageUrl is empty - check Functions.psm1" -ForegroundColor Red; return }
+if ([string]::IsNullOrWhiteSpace($Global:Token))    { Write-Host "Token is empty - check Functions.psm1" -ForegroundColor Red; return }
+
+# Stop early if the CASE MIGRATION section hasn't been added to the module yet
+foreach ($f in "Get-AllPersons", "New-Person", "Get-AllOrganizations", "New-Organization",
+               "Get-AllUserLogins", "New-CaseFile", "Add-CaseLink", "Set-CaseAssignee") {
+    if (-not (Get-Command $f -ErrorAction SilentlyContinue)) {
+        Write-Host "Function '$f' not found in $ModulePath - add the CASE MIGRATION section to the module and save it." -ForegroundColor Red
+        return
+    }
+}
+
+
+# =====================================================================
+# SMALL HELPERS
+# =====================================================================
+
+# When something fails, return the most useful error message (ArkCase's own message if there is one)
+function Get-ErrorText {
+    param($ErrorRecord)
+    if ($ErrorRecord.ErrorDetails -and $ErrorRecord.ErrorDetails.Message) { return $ErrorRecord.ErrorDetails.Message }
+    return $ErrorRecord.Exception.Message
+}
+
+# Change a spreadsheet date into the format ArkCase wants.
+# Example: "10/28/2026" becomes "2026-10-28T00:00:00.000Z". An empty cell stays empty.
+function ConvertTo-ArkDate {
+    param([string]$Text)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return "" }
+    return ([datetime]::Parse($Text)).ToString("yyyy-MM-dd") + "T00:00:00.000Z"
+}
+
+# Read a column even if its header is written slightly differently.
+# Spaces, brackets and capitals are ignored, so "Subject(Organization Type)",
+# "Subject (Organization Type)" and "Subject Organization Type" all count as the same column.
+function Get-RowValue {
+    param($Row, [string]$ColumnName)
+    $wanted = ($ColumnName -replace '[^A-Za-z0-9]', '').ToLower()
+    foreach ($p in $Row.PSObject.Properties) {
+        if (($p.Name -replace '[^A-Za-z0-9]', '').ToLower() -eq $wanted) { return [string]$p.Value }
+    }
+    return ""
+}
+
+
+# =====================================================================
+# PEOPLE - migration rules
+# =====================================================================
+
+# Look for a person by full name, e.g. "Andy Fordjour".
+# Gives back their ID if found, nothing if not found.
+# Stops with an error if two people have the same name (the script can't know which one is meant).
+function Find-PersonId {
+    param($Persons, [string]$FullName)
+    $wanted  = ($FullName -replace '\s+', ' ').Trim()
+    $matches = @($Persons | Where-Object { (([string]$_.name) -replace '\s+', ' ').Trim() -eq $wanted })
+    if ($matches.Count -eq 0) { return $null }
+    if ($matches.Count -gt 1) { throw "$($matches.Count) people are named '$wanted' - resolve the duplicate in ArkCase first." }
+    return [long]$matches[0].object_id_s
+}
+
+# Find the person, or create them if they don't exist. Gives back their ID and name.
+# In a test run (-WhatIf) nothing is created.
+function Resolve-Person {
+    param($Persons, [string]$FirstName, [string]$LastName, [string]$Role)
+
+    $first = ([string]$FirstName).Trim(); $last = ([string]$LastName).Trim()
+    if (-not $first -or -not $last) { throw "$Role first and last name are both required." }
+    $full = "$first $last"
+
+    $id = Find-PersonId -Persons $Persons -FullName $full
+    if ($id) { Write-Host "  $($Role): $full (found, person $id)" }
+    elseif ($WhatIf) { Write-Host "  $($Role): $full (would create)" -ForegroundColor DarkGray; $id = 0 }
+    else {
+        $id = New-Person -FirstName $first -LastName $last
+        Write-Host "  $($Role): $full (created, person $id)" -ForegroundColor Green
+        # Add the new person to our list, so later rows with the same name use them instead of creating another
+        $Persons.Add([pscustomobject]@{ name = $full; object_id_s = $id })
+    }
+    return @{ Id = [long]$id; Name = $full; TargetType = "PERSON" }
+}
+
+
+# =====================================================================
+# ORGANIZATIONS - migration rules
+# =====================================================================
+
+# The 4 organization types in the ArkCase drop-down
+$AllowedOrgTypes = "Government", "Corporation", "Non-profit", "Unknown"
+
+# Check the type from the sheet:
+#   - blank                             -> the default ("Unknown")
+#   - different capitals ("non-profit") -> fixed to the ArkCase spelling ("Non-profit")
+#   - anything else (typo)              -> the default, with a yellow warning
+function Get-OrganizationType {
+    param([string]$Type)
+    $t = ([string]$Type).Trim()
+    if (-not $t) { return $OrganizationType }
+    $match = $AllowedOrgTypes | Where-Object { $_ -eq $t } | Select-Object -First 1   # -eq ignores capitals
+    if ($match) { return $match }
+    Write-Host "  organization type '$t' is not a drop-down option - using '$OrganizationType'" -ForegroundColor Yellow
+    return $OrganizationType
+}
+
+# Look for an organization by name. Gives back its ID, nothing if not found,
+# or stops if two organizations have the same name.
+function Find-OrganizationId {
+    param($Organizations, [string]$Name)
+    $wanted  = ($Name -replace '\s+', ' ').Trim()
+    $matches = @($Organizations | Where-Object { (([string]$_.name) -replace '\s+', ' ').Trim() -eq $wanted })
+    if ($matches.Count -eq 0) { return $null }
+    if ($matches.Count -gt 1) { throw "$($matches.Count) organizations are named '$wanted' - resolve the duplicate in ArkCase first." }
+    return [long]$matches[0].object_id_s
+}
+
+# Find the organization, or create it if it doesn't exist. Gives back its ID and name.
+# $Type is only used when a NEW organization is created; an existing one keeps its type.
+function Resolve-Organization {
+    param($Organizations, [string]$Name, [string]$Role, [string]$Type)
+
+    $name = ([string]$Name).Trim()
+    $id = Find-OrganizationId -Organizations $Organizations -Name $name
+    if ($id) { Write-Host "  $($Role): $name (found, organization $id)" }
+    else {
+        $Type = Get-OrganizationType $Type      # check the type once (blank or typo -> default)
+        if ($WhatIf) {
+            Write-Host "  $($Role): $name (would create organization, type '$Type')" -ForegroundColor DarkGray
+            return @{ Id = 0; Name = $name; TargetType = "ORGANIZATION" }
+        }
+        $id = New-Organization -Name $name -Type $Type
+        Write-Host "  $($Role): $name (created, organization $id, type '$Type')" -ForegroundColor Green
+        # Add it to our list, so later rows with the same name use it instead of creating another
+        $Organizations.Add([pscustomobject]@{ name = $name; object_id_s = $id })
+    }
+    return @{ Id = [long]$id; Name = $name; TargetType = "ORGANIZATION" }
+}
+
+
+# =====================================================================
+# CASE - migration rules
+# =====================================================================
+
+# Decide whether the Subject (or Source) in this row is a person or an organization.
+#   Organization filled in, names empty  -> "ORGANIZATION"
+#   Names filled in, organization empty  -> "PERSON"
+#   Both filled in, or both empty        -> error, and nothing is created for this row
+function Get-PartyType {
+    param($Row, [string]$Prefix)      # $Prefix is "Subject" or "Source"
+
+    $org       = ([string]$Row."$Prefix (Organization)").Trim()
+    $first     = ([string]$Row."$Prefix (Person First Name)").Trim()
+    $last      = ([string]$Row."$Prefix (Person Last Name)").Trim()
+    $hasPerson = [bool]($first -or $last)
+
+    if ($org -and $hasPerson)           { throw "$Prefix has both an organization and a person - fill in only one." }
+    if (-not $org -and -not $hasPerson) { throw "$Prefix is empty - fill in either $Prefix (Organization) or the $Prefix person's names." }
+    if ($org) { return "ORGANIZATION" }
+    if (-not ($first -and $last))       { throw "$Prefix person needs both a first and a last name." }
+    return "PERSON"
+}
+
+# Find or create the Subject / Source - a person or an organization, depending on the columns filled.
+# Uses the lists loaded in the main part ($persons, $orgs).
+function Resolve-Party {
+    param($Row, [string]$Prefix, [string]$Type)
+    if ($Type -eq "ORGANIZATION") {
+        $orgType = Get-RowValue -Row $Row -ColumnName "$Prefix Organization Type"
+        return Resolve-Organization -Organizations $orgs -Name $Row."$Prefix (Organization)" -Role $Prefix.ToLower() -Type $orgType
+    }
+    return Resolve-Person -Persons $persons -FirstName $Row."$Prefix (Person First Name)" -LastName $Row."$Prefix (Person Last Name)" -Role $Prefix.ToLower()
+}
+
+# The case description: the sheet's description, plus the columns the case form has no place for
+function Get-CaseDetails {
+    param($Row)
+    $extra = "Migrated data - Subject (Organization): $($Row.'Subject (Organization)'); " +
+             "Source (Organization): $($Row.'Source (Organization)'); Lead Investigator: $($Row.'Assignee (Lead Investigator)'); " +
+             "Status: $($Row.Status); Closing Date: $($Row.'Closing Date')"
+    return "<p>$($Row.Description)</p><p>$extra</p>"
+}
+
+
+# =====================================================================
+# ASSIGNEE - migration rules
+# =====================================================================
+
+# Is this user active? "ACTIVE" = yes, "DISABLED" (or anything else) = no.
+# Users with no status recorded are treated as active.
+function Test-UserActive {
+    param([string]$Status)
+    return (-not $Status) -or ($Status -in @("VALID", "ACTIVE"))
+}
+
+# Turn what's in the Assignee cell into an ArkCase login.
+#   "John Doe"             -> "john.doe@its.ny.gov"   (first name . last name)
+#   "john.doe@its.ny.gov"  -> used as it is           (you can also type the login directly)
+#   empty cell             -> nothing
+function ConvertTo-Login {
+    param([string]$Value)
+    $v = ([string]$Value).Trim()
+    if (-not $v) { return "" }
+    if ($v -like "*@*") { return $v.ToLower() }
+    $words = @($v -split '\s+' | Where-Object { $_ })
+    if ($words.Count -lt 2) { return "" }              # needs both a first and a last name
+    return ("{0}.{1}@{2}" -f $words[0], $words[-1], $LoginDomain).ToLower()
+}
+
+
+# =====================================================================
+# MAIN PART - this is where the script actually starts working
+# =====================================================================
+
+# Read the spreadsheet
+if (-not (Test-Path -LiteralPath $CsvPath)) { Write-Host "Not found: $CsvPath" -ForegroundColor Red; return }
+$rows = @(Import-Csv -LiteralPath $CsvPath -Encoding UTF8 | Where-Object { $_.$KeyColumn })
+Write-Host "Read $($rows.Count) row(s) from $CsvPath" -ForegroundColor Cyan
+
+# Stop if two rows have the same Case Title (the script couldn't tell them apart)
+$dupes = @($rows | Group-Object { $_.$KeyColumn.Trim() } | Where-Object { $_.Count -gt 1 })
+if ($dupes.Count -gt 0) {
+    Write-Host "These '$KeyColumn' values appear more than once - make them unique first:" -ForegroundColor Red
+    $dupes | ForEach-Object { Write-Host "  $($_.Name) ($($_.Count) rows)" -ForegroundColor Red }
+    return
+}
+if ($WhatIf) { Write-Host "DRY RUN - nothing will be created." -ForegroundColor Yellow }
+
+# Read the log from earlier runs, so finished rows are skipped
+$log = @{}
+if (Test-Path -LiteralPath $LogPath) {
+    foreach ($e in Import-Csv -LiteralPath $LogPath -Encoding UTF8) { $log[$e.Key] = $e }
+}
+
+# Download people, organizations and users once, before going through the rows
+Write-Host "Loading people, organizations and users from ArkCase..." -ForegroundColor Cyan
+try {
+    $persons = Get-AllPersons;       Write-Host "Loaded $($persons.Count) people." -ForegroundColor Cyan
+    $orgs    = Get-AllOrganizations; Write-Host "Loaded $($orgs.Count) organizations." -ForegroundColor Cyan
+    $users   = Get-AllUserLogins
+    $activeCount = @($users.Values | Where-Object { Test-UserActive $_ }).Count
+    Write-Host "Loaded $($users.Count) users ($activeCount active)." -ForegroundColor Cyan
+}
+catch { Write-Host "Could not load from ArkCase: $(Get-ErrorText $_)" -ForegroundColor Red; return }
+
+# The columns of the results log, always in this order
+$LogColumns = "Key","CaseId","CaseNumber","SubjectType","SubjectId","SourceType","SourceId","PartnerAgencyId","Assignee","LinksDone","SheetStatus","Status","Error","Time"
+
+$done = 0; $failed = 0; $skipped = 0
+
+# ----- Go through the spreadsheet one row at a time -----
+foreach ($row in $rows) {
+    $key      = $row.$KeyColumn.Trim()
+    $previous = $log[$key]          # what happened to this row last time (if anything)
+    Write-Host ""
+    Write-Host "[$key]"
+
+    # Already finished in an earlier run? Skip it.
+    if ($previous -and $previous.Status -eq "Done") {
+        Write-Host "  already done (case $($previous.CaseId)) - skipping" -ForegroundColor DarkGray
+        $skipped++; continue
+    }
+
+    # This row's line for the log. "LinksDone" lists the steps already finished
+    # (links and assignee), so a rerun doesn't repeat them.
+    $result = [ordered]@{
+        Key = $key; CaseId = ""; CaseNumber = ""
+        SubjectType = ""; SubjectId = ""; SourceType = ""; SourceId = ""; PartnerAgencyId = ""
+        Assignee  = $(if ($previous) { [string]$previous.Assignee } else { "" })
+        LinksDone = $(if ($previous) { [string]$previous.LinksDone } else { "" })
+        SheetStatus = $row.Status; Status = ""; Error = ""; Time = (Get-Date).ToString("s")
+    }
+
+    try {
+        # STEP 1 - Check the Subject and Source columns. If they break the rules, stop here (nothing created).
+        $subjectType = Get-PartyType -Row $row -Prefix "Subject"
+        $sourceType  = Get-PartyType -Row $row -Prefix "Source"
+        $result.SubjectType = $subjectType; $result.SourceType = $sourceType
+        Write-Host "  subject type: $subjectType   source type: $sourceType"
+
+        # The case needs a person as originator. If the Source is an organization, a default person must be set.
+        if ($sourceType -eq "ORGANIZATION" -and $DefaultOriginatorPersonId -le 0) {
+            throw "Source is an organization, so the case needs a default originator person - run with -DefaultOriginatorPersonId <person ID>. Row skipped, nothing created."
+        }
+
+        # STEP 2 - Find (or create) the Source, the Subject and the Partner Agency
+        $source  = Resolve-Party -Row $row -Prefix "Source"  -Type $sourceType
+        $subject = Resolve-Party -Row $row -Prefix "Subject" -Type $subjectType
+        $result.SourceId = $source.Id; $result.SubjectId = $subject.Id
+        $originatorId = if ($sourceType -eq "PERSON") { $source.Id } else { $DefaultOriginatorPersonId }
+
+        $partnerName = ([string]$row.'Partner Agency (Organization)').Trim()
+        $partner = $null
+        if ($partnerName) {
+            $partnerType = Get-RowValue -Row $row -ColumnName "Partner Agency Organization Type"
+            $partner = Resolve-Organization -Organizations $orgs -Name $partnerName -Role "partner agency" -Type $partnerType
+            $result.PartnerAgencyId = $partner.Id
+        }
+
+        # STEP 3 - Create the case (unless an earlier run already did)
+        if ($previous -and $previous.CaseId) {
+            $caseId = [long]$previous.CaseId; $result.CaseNumber = $previous.CaseNumber
+            Write-Host "  case already created earlier (ID $caseId) - only finishing the missing steps" -ForegroundColor Yellow
+        }
+        elseif ($WhatIf) {
+            Write-Host "  [would create case '$($row.'Case Title')']" -ForegroundColor DarkGray
+            $caseId = 0
+        }
+        else {
+            $caseType = if ($row.'Case Type') { $row.'Case Type' } else { $DefaultCaseType }   # empty cell = use the default
+            $case = New-CaseFile -Title $row.'Case Title' -CaseType $caseType `
+                        -CaseSubtype $row.'Case Subtype' -Jurisdiction $row.Jurisdiction `
+                        -ReceivedDate (ConvertTo-ArkDate $row.'Received Date') `
+                        -Details (Get-CaseDetails -Row $row) -OriginatorId $originatorId
+
+            $caseId = if ($case.id) { [long]$case.id } else { [long]$case.caseId }
+            if ($caseId -le 0) { throw "Case was sent but no ID came back - check ArkCase before rerunning." }
+            $result.CaseNumber = $case.caseNumber
+            Write-Host "  case created: ID $caseId $($case.caseNumber)" -ForegroundColor Green
+        }
+        $result.CaseId = $caseId
+
+        # STEP 4 - Connect the Originating Source, the Subject and the Partner Agency (if any) to the case
+        #          (skips any that an earlier run already connected)
+        $links = @(
+            @{ Type = "ORIGINATING_SOURCE"; Party = $source  },
+            @{ Type = "SUBJECT";            Party = $subject }
+        )
+        if ($partner) { $links += @{ Type = $PartnerAgencyLinkType; Party = $partner } }
+
+        foreach ($link in $links) {
+            if ($result.LinksDone -split ';' -contains $link.Type) { Write-Host "  $($link.Type) already linked earlier" -ForegroundColor DarkGray; continue }
+            if ($WhatIf) { Write-Host "  [would link $($link.Type): $($link.Party.Name)]" -ForegroundColor DarkGray; continue }
+
+            Add-CaseLink -CaseId $caseId -CaseTitle $row.'Case Title' `
+                -PersonId $link.Party.Id -PersonName $link.Party.Name -TargetType $link.Party.TargetType -LinkType $link.Type
+            Write-Host "  linked $($link.Type)" -ForegroundColor Green
+            $result.LinksDone = (@($result.LinksDone -split ';' | Where-Object { $_ }) + $link.Type) -join ';'
+        }
+
+        # STEP 5 - Assign the case to the Lead Investigator.
+        #          If the cell is empty, no ArkCase user has that login, or the user is inactive,
+        #          the case is left unassigned (the row still counts as Done - the log shows why).
+        $login = ConvertTo-Login $row.'Assignee (Lead Investigator)'
+        if (-not $login) {
+            $result.Assignee = "Unassigned (blank)"
+            Write-Host "  no assignee in sheet - left unassigned" -ForegroundColor DarkGray
+        }
+        elseif (-not $users.ContainsKey($login.ToLower())) {
+            $result.Assignee = "Unassigned (no user '$login')"
+            Write-Host "  no ArkCase user '$login' - left unassigned" -ForegroundColor Yellow
+        }
+        elseif (-not (Test-UserActive $users[$login.ToLower()])) {
+            $result.Assignee = "Unassigned (inactive user '$login')"
+            Write-Host "  '$login' is an inactive user - left unassigned" -ForegroundColor Yellow
+        }
+        elseif ($result.LinksDone -split ';' -contains "ASSIGNEE") {
+            Write-Host "  assignee already set earlier" -ForegroundColor DarkGray
+        }
+        elseif ($WhatIf) {
+            Write-Host "  [would assign to $login]" -ForegroundColor DarkGray
+        }
+        else {
+            Set-CaseAssignee -CaseId $caseId -Login $login
+            Write-Host "  assigned to $login" -ForegroundColor Green
+            $result.Assignee  = $login
+            $result.LinksDone = (@($result.LinksDone -split ';' | Where-Object { $_ }) + "ASSIGNEE") -join ';'
+        }
+
+        $result.Status = if ($WhatIf) { "DryRun" } else { "Done" }
+        $done++
+    }
+    catch {
+        # Something went wrong on this row.
+        #   "Failed"                 = no case was created; the next run starts this row from the beginning
+        #   "CaseCreated-LinkFailed" = the case exists; the next run only finishes the missing steps
+        $result.Status = if ($result.CaseId) { "CaseCreated-LinkFailed" } else { "Failed" }
+        $result.Error  = Get-ErrorText $_
+        Write-Host "  FAILED: $($result.Error)" -ForegroundColor Red
+        $failed++
+    }
+
+    # STEP 6 - Save this row's result to the log straight away (so nothing is lost if the script stops)
+    if (-not $WhatIf) {
+        $log[$key] = [pscustomobject]$result
+        $log.Values | Select-Object $LogColumns | Export-Csv -LiteralPath $LogPath -NoTypeInformation -Encoding UTF8
+    }
+}
+
+# ----- Summary -----
+Write-Host ""
+Write-Host "Finished. Done: $done   Failed: $failed   Already done: $skipped" -ForegroundColor Cyan
+if (-not $WhatIf) { Write-Host "Results saved to $LogPath" -ForegroundColor Cyan }
 
