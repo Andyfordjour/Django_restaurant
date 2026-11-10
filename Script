@@ -73,6 +73,8 @@ param(
 
     # Case Type to use when that column is empty
     [string]$DefaultCaseType = "DOHInvestigation",
+    # Used when the Jurisdiction cell is empty
+    [string]$DefaultJurisdiction = "Unknown",
 
     # Type given to NEW organizations when the sheet's type cell is blank or not a valid option
     [string]$OrganizationType = "Unknown",
@@ -254,7 +256,9 @@ function Resolve-Organization {
 #   Names filled in, organization empty  -> "PERSON"
 #   BOTH filled in                       -> "PERSON" (the person has priority; the organization
 #                                           is added to the Partner Agencies in STEP 2)
-#   Both empty, or only half a name      -> error, and nothing is created for this row
+#   Both empty                           -> Source: "NONE" (Source is optional - yellow notice, row goes on)
+#                                           Subject: error, and nothing is created for this row
+#   Only half a name                     -> error, and nothing is created for this row
 function Get-PartyType {
     param($Row, [string]$Prefix)      # $Prefix is "Subject" or "Source"
 
@@ -263,10 +267,16 @@ function Get-PartyType {
     $last      = ([string]$Row."$Prefix (Person Last Name)").Trim()
     $hasPerson = [bool]($first -or $last)
 
-    if (-not $org -and -not $hasPerson) { throw "$Prefix is empty - fill in either $Prefix (Organization) or the $Prefix person's names." }
-    if ($org) { return "ORGANIZATION" }
-    if (-not ($first -and $last))       { throw "$Prefix person needs both a first and a last name." }
-    return "PERSON"
+    if (-not $org -and -not $hasPerson) {
+        if ($Prefix -eq "Source") { return "NONE" }      # Source is optional - it may be left blank
+        throw "$Prefix is empty - fill in either $Prefix (Organization) or the $Prefix person's names."
+    }
+    if ($hasPerson) {
+        # A person was given (with or without an organization) - the person has priority
+        if (-not ($first -and $last))   { throw "$Prefix person needs both a first and a last name." }
+        return "PERSON"
+    }
+    return "ORGANIZATION"
 }
 
 # Find or create the Subject / Source - a person or an organization, depending on the columns filled.
@@ -391,15 +401,18 @@ foreach ($row in $rows) {
             }
         }
 
-        # The case needs a person as originator. If the Source is an organization, a default person must be set.
-        if ($sourceType -eq "ORGANIZATION" -and $DefaultOriginatorPersonId -le 0) {
-            throw "Source is an organization, so the case needs a default originator person - run with -DefaultOriginatorPersonId <person ID>. Row skipped, nothing created."
+        # The case needs a person as originator. If the Source is an organization or blank, a default person must be set.
+        if ($sourceType -eq "NONE") {
+            Write-Host "  Source is blank - no Originating Source will be linked" -ForegroundColor Yellow
+        }
+        if ($sourceType -ne "PERSON" -and $DefaultOriginatorPersonId -le 0) {
+            throw "Source is an organization or blank, so the case needs a default originator person - run with -DefaultOriginatorPersonId <person ID>. Row skipped, nothing created."
         }
 
         # STEP 2 - Find (or create) the Source, the Subject and the Partner Agency
-        $source  = Resolve-Party -Row $row -Prefix "Source"  -Type $sourceType
+        $source  = if ($sourceType -ne "NONE") { Resolve-Party -Row $row -Prefix "Source" -Type $sourceType } else { $null }
         $subject = Resolve-Party -Row $row -Prefix "Subject" -Type $subjectType
-        $result.SourceId = $source.Id; $result.SubjectId = $subject.Id
+        $result.SourceId = $(if ($source) { $source.Id } else { "" }); $result.SubjectId = $subject.Id
         $originatorId = if ($sourceType -eq "PERSON") { $source.Id } else { $DefaultOriginatorPersonId }
 
         # Partner Agencies - a list, made from:
@@ -444,8 +457,9 @@ foreach ($row in $rows) {
         }
         else {
             $caseType = if ($row.'Case Type') { $row.'Case Type' } else { $DefaultCaseType }   # empty cell = use the default
+            $jurisdiction = if (([string]$row.Jurisdiction).Trim()) { ([string]$row.Jurisdiction).Trim() } else { $DefaultJurisdiction }   # empty cell = use the default
             $case = New-CaseFile -Title $row.'Case Title' -CaseType $caseType `
-                        -CaseSubtype $row.'Case Subtype' -Jurisdiction $row.Jurisdiction `
+                        -CaseSubtype $row.'Case Subtype' -Jurisdiction $jurisdiction `
                         -ReceivedDate (ConvertTo-ArkDate $row.'Received Date') `
                         -Details (Get-CaseDetails -Row $row) -OriginatorId $originatorId
 
@@ -461,10 +475,11 @@ foreach ($row in $rows) {
         # Each link has a "Done" name for the log: SUBJECT, ORIGINATING_SOURCE, and for each
         # Partner Agency its type plus the organization ID (e.g. PARTNER_AGENCY:147), so several
         # partner agencies can each be remembered separately.
-        $links = @(
-            @{ Type = "ORIGINATING_SOURCE"; Party = $source;  DoneName = "ORIGINATING_SOURCE" },
-            @{ Type = "SUBJECT";            Party = $subject; DoneName = "SUBJECT" }
-        )
+        $links = @()
+        if ($source) {      # no Source in the sheet = no Originating Source link
+            $links += @{ Type = "ORIGINATING_SOURCE"; Party = $source; DoneName = "ORIGINATING_SOURCE" }
+        }
+        $links += @{ Type = "SUBJECT"; Party = $subject; DoneName = "SUBJECT" }
         foreach ($p in $partners) {
             $links += @{ Type = $PartnerAgencyLinkType; Party = $p; DoneName = "${PartnerAgencyLinkType}:$($p.Id)" }
         }
@@ -532,4 +547,3 @@ foreach ($row in $rows) {
 Write-Host ""
 Write-Host "Finished. Done: $done   Failed: $failed   Already done: $skipped" -ForegroundColor Cyan
 if (-not $WhatIf) { Write-Host "Results saved to $LogPath" -ForegroundColor Cyan }
-
