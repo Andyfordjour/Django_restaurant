@@ -7,7 +7,7 @@
 #              (reads the CSV and Briefcase, shows what WOULD be created, but creates nothing)
 #
 # CSV columns: givenName, familyName
-# Uses from Functions.psm1: Get-AllPersons (the duplicate check)
+# Uses from Functions.psm1: GetPersonFromBriefcase (the duplicate check)
 # =====================================================================
 param(
     [switch]$WhatIf
@@ -56,7 +56,8 @@ function Get-NameKey {
 Write-Host "Loading existing people from Briefcase..." -ForegroundColor Cyan
 $existing = @{}      # name key -> person ID
 try {
-    foreach ($p in Get-AllPersons) { $existing[(Get-NameKey $p.name)] = $p.object_id_s }
+    $allPeople = @(GetPersonFromBriefcase)      # every person in Briefcase (up to 500)
+    foreach ($p in $allPeople) { $existing[(Get-NameKey $p.name)] = $p.object_id_s }
 }
 catch {
     # Without this list the script can't tell who already exists, so it stops rather than risk duplicates
