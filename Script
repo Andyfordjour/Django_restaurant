@@ -54,10 +54,14 @@ function Get-NameKey {
 }
 
 Write-Host "Loading existing people from Briefcase..." -ForegroundColor Cyan
-$existing = @{}      # name key -> person ID
+$existing = @{}      # name key -> list of EVERY person ID with that name (2 or more = duplicate in Briefcase)
 try {
-    $allPeople = @(GetPersonFromBriefcase)      # every person in Briefcase (up to 500)
-    foreach ($p in $allPeople) { $existing[(Get-NameKey $p.name)] = $p.object_id_s }
+    $allPeople = @(GetPersonFromBriefcase)      # every person in Briefcase (up to 500), duplicates included
+    foreach ($p in $allPeople) {
+        $k = Get-NameKey $p.name
+        if ($existing.ContainsKey($k)) { $existing[$k] += [string]$p.object_id_s }    # name seen before - add this ID to its list
+        else                           { $existing[$k] = @([string]$p.object_id_s) }  # first time this name is seen
+    }
 }
 catch {
     # Without this list the script can't tell who already exists, so it stops rather than risk duplicates
@@ -65,10 +69,11 @@ catch {
     Write-Host "Could not load existing people: $msg" -ForegroundColor Red
     return
 }
-Write-Host "Found $($existing.Count) existing person(s)." -ForegroundColor Cyan
+Write-Host "Found $($allPeople.Count) existing person(s)." -ForegroundColor Cyan
 
 $created  = 0
 $skipped  = 0
+$duplicates = New-Object System.Collections.Generic.List[string]   # CSV names found 2 or more times in Briefcase
 $failures = New-Object System.Collections.Generic.List[string]
 $row      = 1   # row number (row 1 is the header)
 
@@ -86,11 +91,21 @@ foreach ($Person in $PeopleList) {
     $given  = ([string]$Person.givenName).Trim()
     $family = ([string]$Person.familyName).Trim()
 
-    # Already in Briefcase (or added earlier in this run)? Skip it - no duplicate.
+    # Is this name already in Briefcase (or added earlier in this run)?
+    #   2 or more matches -> DUPLICATE printout, not created
+    #   1 match           -> already exists, not created
+    #   no match          -> create it (below)
     $key = Get-NameKey "$given $family"
     if ($existing.ContainsKey($key)) {
-        Write-Host "Row ${row}: $given $family already exists (ID $($existing[$key])) - skipped" -ForegroundColor DarkGray
-        $skipped++
+        $ids = @($existing[$key])
+        if ($ids.Count -ge 2) {
+            Write-Host "Row ${row}: DUPLICATE - $given $family is in Briefcase $($ids.Count) times (IDs $($ids -join ', ')) - not created" -ForegroundColor Magenta
+            $duplicates.Add("Row ${row}: $given $family - $($ids.Count) times (IDs $($ids -join ', '))")
+        }
+        else {
+            Write-Host "Row ${row}: $given $family already exists (ID $($ids[0])) - skipped" -ForegroundColor DarkGray
+            $skipped++
+        }
         continue
     }
 
@@ -98,7 +113,7 @@ foreach ($Person in $PeopleList) {
     if ($WhatIf) {
         Write-Host "Row ${row}: $given $family - would create" -ForegroundColor Yellow
         $created++
-        $existing[$key] = "(new)"      # so a repeat later in the CSV shows as "already exists", like a real run
+        $existing[$key] = @("(new)")   # so a repeat later in the CSV shows as "already exists", like a real run
         continue
     }
 
@@ -122,7 +137,7 @@ foreach ($Person in $PeopleList) {
         $created++
 
         # Remember them, so the same name later in the CSV isn't created a second time
-        $existing[$key] = $Response.id
+        $existing[$key] = @([string]$Response.id)
     }
     catch {
         $msg = if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }
@@ -134,6 +149,10 @@ foreach ($Person in $PeopleList) {
 # Summary
 Write-Host ""
 $createdLabel = if ($WhatIf) { "Would create" } else { "Created" }
-Write-Host "Process complete! ${createdLabel}: $created   Already existed: $skipped   Problems: $($failures.Count)" -ForegroundColor Cyan
+Write-Host "Process complete! ${createdLabel}: $created   Already existed: $skipped   Duplicates: $($duplicates.Count)   Problems: $($failures.Count)" -ForegroundColor Cyan
+if ($duplicates.Count -gt 0) {
+    Write-Host "Duplicates in Briefcase (not created - clean these up in Briefcase):" -ForegroundColor Magenta
+    $duplicates | ForEach-Object { Write-Host "  $_" -ForegroundColor Magenta }
+}
 $failures | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
 if ($WhatIf) { Write-Host "DRY RUN - nothing was created. Run again without -WhatIf to create them." -ForegroundColor Yellow }
