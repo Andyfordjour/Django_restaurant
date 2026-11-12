@@ -1,1 +1,104 @@
+# =====================================================================
+# ADD ORGANIZATIONS TO BRIEFCASE FROM A CSV
+#
+# HOW TO RUN
+#   Real run:  .\AddOrganizations.ps1
+#   Dry run:   .\AddOrganizations.ps1 -WhatIf
+#              (reads the CSV and Briefcase, shows what WOULD be created, but creates nothing)
+#
+# CSV columns: OrganizationName, OrganizationType
+# Uses from Functions.psm1: GetOrganizationFromBriefcase, AddOrganization
+# =====================================================================
+param(
+    [switch]$WhatIf
+)
+
+Import-Module V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\Functions.psm1 -Force
+
+# 1. Get file information
+[string]$rootPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment"
+[string]$sourceFileName = (Read-Host "Enter the csvfile name with extension").Trim()
+$sourceFile = $rootPath + "\" + $sourceFileName
+$sourceFile
+
+# 2. Check the file exists (stop if it doesn't)
+if (Test-Path -Path $sourceFile -PathType Leaf) {
+    Write-Host "The file exists!"
+} else {
+    Write-Host "The file $sourceFileName is missing at $rootPath" -ForegroundColor Red
+    return
+}
+
+# 3. Import the organizations from the CSV file
+Write-Host "Reading data from $sourceFile..." -ForegroundColor Cyan
+$OrganizationsList = @(Import-Csv -LiteralPath $sourceFile)
+
+# 3.a Count of rows in the CSV
+Write-Host "Found $($OrganizationsList.Count) row(s)." -ForegroundColor Cyan
+if ($WhatIf) { Write-Host "DRY RUN - nothing will be created." -ForegroundColor Yellow }
+
+# 3.b Collect the rows that fail
+$FailedOrganization = New-Object System.Collections.Generic.List[string]
+
+# Step 1 - Get the names already in Briefcase
+$existingNames = @((GetOrganizationFromBriefcase).name)
+
+# 4. Loop through each organization and send the API request
+$row     = 1   # row number (row 1 is the header)
+$created = 0   # how many were created (or would be, in a dry run)
+$skipped = 0   # how many already existed
+
+foreach ($Organization in $OrganizationsList) {
+    $row++
+
+    # Skip the row if the name or type is empty
+    if ([string]::IsNullOrWhiteSpace($Organization.OrganizationName) -or [string]::IsNullOrWhiteSpace($Organization.OrganizationType)) {
+        $FailedOrganization.Add("Row ${row}: SKIPPED (missing OrganizationName or OrganizationType)")
+        Write-Warning "Row ${row}: skipping - missing OrganizationName or OrganizationType."
+        continue
+    }
+
+    # The name and type for this row
+    $orgName = ([string]$Organization.OrganizationName).Trim()
+    $orgType = ([string]$Organization.OrganizationType).Trim()
+
+    # Step 2 - Skip any organization that already exists
+    if ($existingNames -contains $orgName) {
+        Write-Host "Row ${row}: $orgName already exists - skipped" -ForegroundColor DarkGray
+        $skipped++
+        continue
+    }
+
+    # Dry run: only say what would happen, then move on to the next row
+    if ($WhatIf) {
+        Write-Host "Row ${row}: $orgName (type $orgType) - would create" -ForegroundColor Yellow
+        $created++
+        $existingNames += $orgName      # so a repeat later in the CSV shows as "already exists", like a real run
+        continue
+    }
+
+    Write-Host "Row ${row}: creating organization $orgName as type $orgType..." -NoNewline
+
+    try {
+        # Send the request to Briefcase
+        $Response = AddOrganization -orgName $orgName -orgType $orgType
+        Write-Host " [SUCCESS] (ID: $($Response.organizationId))" -ForegroundColor Green
+        $created++
+
+        # Step 3 - Remember the new name, so a repeat later in the CSV is also skipped
+        $existingNames += $orgName
+    }
+    catch {
+        $msg = if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }
+        Write-Host " [FAILED] $msg" -ForegroundColor Red
+        $FailedOrganization.Add("Row ${row}: $orgName ($orgType) - $msg")
+    }
+}
+
+# Summary
+Write-Host ""
+$createdLabel = if ($WhatIf) { "Would create" } else { "Created" }
+Write-Host "Process complete! ${createdLabel}: $created   Already existed: $skipped   Problems: $($FailedOrganization.Count)" -ForegroundColor Cyan
+$FailedOrganization | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+if ($WhatIf) { Write-Host "DRY RUN - nothing was created. Run again without -WhatIf to create them." -ForegroundColor Yellow }
 
