@@ -1,104 +1,138 @@
 # =====================================================================
-# ADD ORGANIZATIONS TO BRIEFCASE FROM A CSV
+# ADD PEOPLE TO BRIEFCASE FROM A CSV
 #
 # HOW TO RUN
-#   Real run:  .\AddOrganizations.ps1
-#   Dry run:   .\AddOrganizations.ps1 -WhatIf
+#   Real run:  .\AddPeopleIntoBriefcaseViaCSV.ps1
+#   Dry run:   .\AddPeopleIntoBriefcaseViaCSV.ps1 -WhatIf
 #              (reads the CSV and Briefcase, shows what WOULD be created, but creates nothing)
 #
-# CSV columns: OrganizationName, OrganizationType
-# Uses from Functions.psm1: GetOrganizationFromBriefcase, AddOrganization
+# CSV columns: givenName, familyName
+# Uses from Functions.psm1: Get-AllPersons (the duplicate check)
 # =====================================================================
 param(
     [switch]$WhatIf
 )
 
+# --- SECURITY PROTOCOL ---
+# Force PowerShell to use TLS 1.2/1.3 (required for secure NYS ITS environments)
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
 Import-Module V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\Functions.psm1 -Force
+$BaseUrl = $Global:StageUrl
+$Headers = @{
+    "Authorization" = "Bearer $Global:Token"
+    "Accept"        = "application/json"
+}
 
-# 1. Get file information
+# --- CONFIGURATION ---
+$ApiUrl = "$BaseUrl/api/latest/plugin/person"
+
+# 1. Ask for the CSV file name (the file must be in this folder)
 [string]$rootPath = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment"
 [string]$sourceFileName = (Read-Host "Enter the csvfile name with extension").Trim()
-$sourceFile = $rootPath + "\" + $sourceFileName
-$sourceFile
+$CsvPath = $rootPath + "\" + $sourceFileName
+$CsvPath
 
-# 2. Check the file exists (stop if it doesn't)
-if (Test-Path -Path $sourceFile -PathType Leaf) {
-    Write-Host "The file exists!"
-} else {
+# 2. Check the CSV file exists (stop if it doesn't)
+if (-not (Test-Path -LiteralPath $CsvPath -PathType Leaf)) {
     Write-Host "The file $sourceFileName is missing at $rootPath" -ForegroundColor Red
     return
 }
+Write-Host "The file exists!"
 
-# 3. Import the organizations from the CSV file
-Write-Host "Reading data from $sourceFile..." -ForegroundColor Cyan
-$OrganizationsList = @(Import-Csv -LiteralPath $sourceFile)
-
-# 3.a Count of rows in the CSV
-Write-Host "Found $($OrganizationsList.Count) row(s)." -ForegroundColor Cyan
+# 3. Import the people from the CSV file
+Write-Host "Reading data from $CsvPath..." -ForegroundColor Cyan
+$PeopleList = @(Import-Csv -LiteralPath $CsvPath -Encoding UTF8)
+Write-Host "Found $($PeopleList.Count) row(s)." -ForegroundColor Cyan
 if ($WhatIf) { Write-Host "DRY RUN - nothing will be created." -ForegroundColor Yellow }
 
-# 3.b Collect the rows that fail
-$FailedOrganization = New-Object System.Collections.Generic.List[string]
+# --- DUPLICATE CHECK: load the names of every person already in Briefcase ---
+# Names are compared without caring about capitals or extra spaces,
+# so "Roy Sen" and "roy  sen" count as the same person.
+function Get-NameKey {
+    param([string]$Name)
+    return (([string]$Name) -replace '\s+', ' ').Trim().ToLower()
+}
 
-# Step 1 - Get the names already in Briefcase
-$existingNames = @((GetOrganizationFromBriefcase).name)
+Write-Host "Loading existing people from Briefcase..." -ForegroundColor Cyan
+$existing = @{}      # name key -> person ID
+try {
+    foreach ($p in Get-AllPersons) { $existing[(Get-NameKey $p.name)] = $p.object_id_s }
+}
+catch {
+    # Without this list the script can't tell who already exists, so it stops rather than risk duplicates
+    $msg = if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }
+    Write-Host "Could not load existing people: $msg" -ForegroundColor Red
+    return
+}
+Write-Host "Found $($existing.Count) existing person(s)." -ForegroundColor Cyan
 
-# 4. Loop through each organization and send the API request
-$row     = 1   # row number (row 1 is the header)
-$created = 0   # how many were created (or would be, in a dry run)
-$skipped = 0   # how many already existed
+$created  = 0
+$skipped  = 0
+$failures = New-Object System.Collections.Generic.List[string]
+$row      = 1   # row number (row 1 is the header)
 
-foreach ($Organization in $OrganizationsList) {
+# 4. Loop through each person and send the API request
+foreach ($Person in $PeopleList) {
     $row++
 
-    # Skip the row if the name or type is empty
-    if ([string]::IsNullOrWhiteSpace($Organization.OrganizationName) -or [string]::IsNullOrWhiteSpace($Organization.OrganizationType)) {
-        $FailedOrganization.Add("Row ${row}: SKIPPED (missing OrganizationName or OrganizationType)")
-        Write-Warning "Row ${row}: skipping - missing OrganizationName or OrganizationType."
+    # Skip the row if a name is empty
+    if ([string]::IsNullOrWhiteSpace($Person.givenName) -or [string]::IsNullOrWhiteSpace($Person.familyName)) {
+        $failures.Add("Row ${row}: SKIPPED (missing givenName or familyName)")
+        Write-Warning "Row ${row}: skipping - missing givenName or familyName."
         continue
     }
 
-    # The name and type for this row
-    $orgName = ([string]$Organization.OrganizationName).Trim()
-    $orgType = ([string]$Organization.OrganizationType).Trim()
+    $given  = ([string]$Person.givenName).Trim()
+    $family = ([string]$Person.familyName).Trim()
 
-    # Step 2 - Skip any organization that already exists
-    if ($existingNames -contains $orgName) {
-        Write-Host "Row ${row}: $orgName already exists - skipped" -ForegroundColor DarkGray
+    # Already in Briefcase (or added earlier in this run)? Skip it - no duplicate.
+    $key = Get-NameKey "$given $family"
+    if ($existing.ContainsKey($key)) {
+        Write-Host "Row ${row}: $given $family already exists (ID $($existing[$key])) - skipped" -ForegroundColor DarkGray
         $skipped++
         continue
     }
 
     # Dry run: only say what would happen, then move on to the next row
     if ($WhatIf) {
-        Write-Host "Row ${row}: $orgName (type $orgType) - would create" -ForegroundColor Yellow
+        Write-Host "Row ${row}: $given $family - would create" -ForegroundColor Yellow
         $created++
-        $existingNames += $orgName      # so a repeat later in the CSV shows as "already exists", like a real run
+        $existing[$key] = "(new)"      # so a repeat later in the CSV shows as "already exists", like a real run
         continue
     }
 
-    Write-Host "Row ${row}: creating organization $orgName as type $orgType..." -NoNewline
+    # Construct the JSON payload matching the ArkCase schema
+    $Payload = @{
+        className  = "com.armedia.acm.plugins.person.organization.model.Person"
+        objectType = "PERSON"
+        givenName  = $given
+        familyName = $family
+        status     = "ACTIVE"
+    } | ConvertTo-Json -Depth 5
+
+    Write-Host "Row ${row}: creating $given $family... " -NoNewline
 
     try {
-        # Send the request to Briefcase
-        $Response = AddOrganization -orgName $orgName -orgType $orgType
-        Write-Host " [SUCCESS] (ID: $($Response.organizationId))" -ForegroundColor Green
+        # Send the POST request (as UTF-8 bytes, so names with accents arrive intact)
+        $Response = Invoke-RestMethod -Uri $ApiUrl -Method Post -Headers $Headers -ErrorAction Stop `
+                        -Body ([System.Text.Encoding]::UTF8.GetBytes($Payload)) -ContentType "application/json; charset=utf-8"
+
+        Write-Host "[SUCCESS] (ID: $($Response.id))" -ForegroundColor Green
         $created++
 
-        # Step 3 - Remember the new name, so a repeat later in the CSV is also skipped
-        $existingNames += $orgName
+        # Remember them, so the same name later in the CSV isn't created a second time
+        $existing[$key] = $Response.id
     }
     catch {
         $msg = if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }
-        Write-Host " [FAILED] $msg" -ForegroundColor Red
-        $FailedOrganization.Add("Row ${row}: $orgName ($orgType) - $msg")
+        Write-Host "[FAILED] $msg" -ForegroundColor Red
+        $failures.Add("Row ${row}: $given $family - $msg")
     }
 }
 
 # Summary
 Write-Host ""
 $createdLabel = if ($WhatIf) { "Would create" } else { "Created" }
-Write-Host "Process complete! ${createdLabel}: $created   Already existed: $skipped   Problems: $($FailedOrganization.Count)" -ForegroundColor Cyan
-$FailedOrganization | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
+Write-Host "Process complete! ${createdLabel}: $created   Already existed: $skipped   Problems: $($failures.Count)" -ForegroundColor Cyan
+$failures | ForEach-Object { Write-Host "  $_" -ForegroundColor Yellow }
 if ($WhatIf) { Write-Host "DRY RUN - nothing was created. Run again without -WhatIf to create them." -ForegroundColor Yellow }
-
