@@ -1,1 +1,69 @@
+# =====================================================================
+# Functions.psm1 - REPLACE lines 3 to 16 (from $Global:Token = "" down to the closing } of $Headers)
+# with everything below. Keep line 1 (CLS) and everything after line 16 as it is.
+# =====================================================================
+
+# ----- ENVIRONMENTS -----
+# Paste each environment's token between the quotes (same login process, different URL).
+$StageToken = ""
+$ProdToken  = ""
+
+# The environments the scripts can choose from (name -> URL and token)
+$Environments = [ordered]@{
+    Stage = @{ Url = "https://nysits-stage.arkcase.us/arkcase"; Token = $StageToken }
+    Prod  = @{ Url = "https://nysits.arkcase.us/arkcase";       Token = $ProdToken  }
+}
+
+# Until an environment is chosen, Stage is used - so scripts that don't ask keep working as before.
+$Global:Token    = $StageToken
+$Global:StageUrl = $Environments.Stage.Url
+$BaseUrl         = $Global:StageUrl
+
+$Headers = @{
+    "Authorization" = "Bearer $Global:Token"
+    "Accept"        = "application/json"
+}
+
+# Ask which environment to use (or take it from -Name), then point EVERY function
+# in this module at it. Gives back the environment's name ("Stage" or "Prod").
+#   Select-BriefcaseEnvironment             -> shows the menu
+#   Select-BriefcaseEnvironment -Name Prod  -> no menu
+function Select-BriefcaseEnvironment {
+    param([string]$Name)
+
+    $names = @($Environments.Keys)
+
+    # No name given - show the menu
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        Write-Host "Which environment?" -ForegroundColor Cyan
+        for ($i = 0; $i -lt $names.Count; $i++) {
+            Write-Host "  $($i + 1)) $($names[$i])   $($Environments[$names[$i]].Url)"
+        }
+        $answer = (Read-Host "Enter 1-$($names.Count)").Trim()
+        if ($answer -match '^\d+$' -and [int]$answer -ge 1 -and [int]$answer -le $names.Count) {
+            $Name = $names[[int]$answer - 1]
+        }
+        else { throw "'$answer' is not one of the choices." }
+    }
+
+    # Check the name (capitals don't matter: "prod" = "Prod")
+    $match = @($names | Where-Object { $_ -eq $Name })
+    if ($match.Count -eq 0) { throw "Unknown environment '$Name'. Choices: $($names -join ', ')." }
+    $Name   = $match[0]
+    $chosen = $Environments[$Name]
+    if ([string]::IsNullOrWhiteSpace($chosen.Token)) { throw "The $Name token is empty - paste it into Functions.psm1 (`$${Name}Token)." }
+
+    # Point this module's functions at the chosen environment ($script: = this module's own variables)
+    $script:BaseUrl = $chosen.Url
+    $script:Headers = @{
+        "Authorization" = "Bearer $($chosen.Token)"
+        "Accept"        = "application/json"
+    }
+    # ...and the global copies, for scripts that build their own headers
+    $Global:StageUrl = $chosen.Url
+    $Global:Token    = $chosen.Token
+
+    Write-Host "Environment: $Name   $($chosen.Url)" -ForegroundColor Cyan
+    return $Name
+}
 
