@@ -253,3 +253,9 @@ function Set-CaseAssignee {
         throw "Assign step 2 of 2 - SAVING case $CaseId (assignee $Login) was refused: $why"
     }
 }
+
+
+            Add-CaseLink -CaseId $caseId -CaseTitle $row.'Case Title' `
+                -PersonId $link.Party.Id -PersonName $link.Party.Name -TargetType $link.Party.TargetType -LinkType $link.Type `
+                -CaseNumber $result.CaseNumber
+
