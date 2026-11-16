@@ -1,1 +1,35 @@
+function New-CaseFile {
+    param(
+        [Parameter(Mandatory)] [string]$Title,
+        [Parameter(Mandatory)] [string]$CaseType,
+        [string]$CaseSubtype,
+        [string]$Jurisdiction,
+        [string]$ReceivedDate,
+        [string]$Details,
+        [long]$OriginatorId = 0
+    )
+    $body = [ordered]@{
+        className    = "gov.nysits.general.dto.NewNYSCaseFileDTO"
+        title        = $Title
+        caseType     = $CaseType
+        caseSubtype  = $CaseSubtype
+        jurisdiction = $Jurisdiction
+        receivedDate = $(if ($ReceivedDate) { $ReceivedDate } else { $null })
+        details      = $Details
+    }
+    # Add the originator only when there is one
+    if ($OriginatorId -gt 0) {
+        $body.originator = [ordered]@{
+            personId   = $OriginatorId
+            personType = "Initiator"
+            parentType = "CASE_FILE"
+        }
+    }
+    $body = $body | ConvertTo-Json -Depth 5
+
+    $Url = "$BaseUrl/api/v1/plugin/casefile"
+    $response = Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -ErrorAction Stop `
+                    -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8"
+    return $response
+}
 
