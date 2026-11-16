@@ -1,5 +1,10 @@
-foreach ($id in 281, 285) {
-    "===== Case $id ====="
-    (Invoke-RestMethod "$Global:StageUrl/api/v1/service/objectassociations?parent-id=$id&parent-type=CASE_FILE" -Headers @{ Authorization = "Bearer $Global:Token" }).response.docs |
-        Select-Object association_type_s, target_type_s, target_id_s, target_name_s, parent_title_s | Format-Table -AutoSize
-}
+$body = [ordered]@{
+    parentId = 285; parentType = "CASE_FILE"; parentTitle = "DOH-16Dr. Paul"; parentName = "DOH_Inv_2026_0175"
+    associationType = "SUBJECT"; targetId = 115; targetType = "PERSON"; targetTitle = $null; targetName = "Andy Fordjour"
+    inverseAssociation = [ordered]@{
+        parentId = 115; parentType = "PERSON"; parentTitle = $null; parentName = "Andy Fordjour"
+        associationType = "SUBJECT"; targetId = 285; targetType = "CASE_FILE"; targetTitle = "DOH-16Dr. Paul"; targetName = "DOH_Inv_2026_0175"
+    }
+} | ConvertTo-Json -Depth 5
+$resp = Invoke-RestMethod "$Global:StageUrl/api/v1/service/objectassociations" -Method Post -Headers @{ Authorization = "Bearer $Global:Token"; Accept = "application/json" } -Body $body -ContentType "application/json"
+$resp | ConvertTo-Json -Depth 3
