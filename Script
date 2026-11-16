@@ -1,5 +1,3 @@
-foreach ($id in 281, 285) {
-    "===== Case $id ====="
-    Invoke-RestMethod "$Global:StageUrl/api/v1/service/objectassociations?parent-id=$id&parent-type=CASE_FILE" -Headers @{ Authorization = "Bearer $Global:Token" } |
-        Select-Object associationType, targetType, targetId, targetName, parentName | Format-Table
-}
+$r = Invoke-RestMethod "$Global:StageUrl/api/v1/service/objectassociations?parent-id=281&parent-type=CASE_FILE" -Headers @{ Authorization = "Bearer $Global:Token" }
+$r | ConvertTo-Json -Depth 5
+
