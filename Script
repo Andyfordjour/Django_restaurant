@@ -600,3 +600,256 @@ foreach ($row in $rows) {
 Write-Host ""
 Write-Host "Finished. Done: $done   Failed: $failed   Already done: $skipped" -ForegroundColor Cyan
 if (-not $WhatIf) { Write-Host "Results saved to $LogPath" -ForegroundColor Cyan }
+
+
+# =====================================================================
+# CASE MIGRATION - ArkCase API calls
+#
+# Used by CreateCasesFromCsv.ps1.
+# These functions use the module's $BaseUrl and $Headers (set at the top of this file).
+# Each function makes its own ArkCase call. Every other value it needs is passed in.
+# =====================================================================
+
+
+# ----- PEOPLE -----
+
+# All people in ArkCase, 500 at a time (not just the first 10).
+# Each has "name" = "First Last" and "object_id_s" = ID.
+function Get-AllPersons {
+    $all = New-Object System.Collections.Generic.List[object]
+    $start = 0
+    do {
+        $Url = "$BaseUrl/api/latest/plugin/search/PERSON?start=$start&n=500"
+        $response = Invoke-RestMethod -Uri $Url -Method Get -Headers $Headers -ErrorAction Stop
+        $docs = @($response.response.docs)
+        foreach ($d in $docs) { $all.Add($d) }
+        $total = [int]$response.response.numFound
+        $start += 500
+    } while ($docs.Count -gt 0 -and $start -lt $total)
+    return ,$all
+}
+
+# Create a person and give back the new ID.
+# Sent as plain JSON to plugin/person (tested and working - same route as AddPeopleIntoBriefcaseViaCSV.ps1).
+function New-Person {
+    param(
+        [Parameter(Mandatory)] [string]$FirstName,
+        [Parameter(Mandatory)] [string]$LastName
+    )
+    # The person's details (givenName = first name, familyName = last name)
+    $body = [ordered]@{
+        className  = "com.armedia.acm.plugins.person.organization.model.Person"
+        objectType = "PERSON"
+        givenName  = $FirstName
+        familyName = $LastName
+        status     = "ACTIVE"
+    } | ConvertTo-Json -Depth 5
+
+    # Sent as UTF-8 bytes, so names with accents or special characters arrive intact
+    $Url = "$BaseUrl/api/latest/plugin/person"
+    $person = Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -ErrorAction Stop `
+                  -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8"
+
+    if (-not $person.id) { throw "Person '$FirstName $LastName' was sent but no ID came back - check ArkCase before rerunning." }
+    return [long]$person.id
+}
+
+
+# ----- ORGANIZATIONS -----
+
+# All organizations in ArkCase, 500 at a time.
+# Each has "name" and "object_id_s" = ID.
+function Get-AllOrganizations {
+    $all = New-Object System.Collections.Generic.List[object]
+    $start = 0
+    do {
+        $Url = "$BaseUrl/api/latest/plugin/search/ORGANIZATION?start=$start&n=500"
+        $response = Invoke-RestMethod -Uri $Url -Method Get -Headers $Headers -ErrorAction Stop
+        $docs = @($response.response.docs)
+        foreach ($d in $docs) { $all.Add($d) }
+        $total = [int]$response.response.numFound
+        $start += 500
+    } while ($docs.Count -gt 0 -and $start -lt $total)
+    return ,$all
+}
+
+# Create an organization and give back the new ID.
+# -Type must be one of the ArkCase drop-down values: Government, Corporation, Non-profit, Unknown.
+function New-Organization {
+    param(
+        [Parameter(Mandatory)] [string]$Name,
+        [Parameter(Mandatory)] [string]$Type
+    )
+    $body = [ordered]@{
+        className          = "com.armedia.acm.plugins.person.organization.model.Organization"
+        organizationValue  = $Name
+        organizationType   = $Type
+        addresses          = @()
+        contactMethods     = @()
+        identifications    = @()
+        personAssociations = @()
+        defaultEmail = $null; defaultFax = $null; defaultPhone = $null; defaultUrl = $null
+        details            = ""
+        modified           = $null
+    } | ConvertTo-Json -Depth 5
+
+    # Sent as UTF-8 bytes, so special characters arrive intact
+    $Url = "$BaseUrl/api/latest/plugin/organizations"
+    $org = Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -ErrorAction Stop `
+               -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8"
+
+    if (-not $org.organizationId) { throw "Organization '$Name' was sent but no ID came back - check ArkCase before rerunning." }
+    return [long]$org.organizationId
+}
+
+
+# ----- USERS -----
+
+# Every ArkCase user, 500 at a time, as a list of: login (lower-case) -> status ("ACTIVE" or "DISABLED")
+function Get-AllUserLogins {
+    $users = @{}
+    $start = 0
+    do {
+        $Url = "$BaseUrl/api/latest/plugin/search/USER?start=$start&n=500"
+        $response = Invoke-RestMethod -Uri $Url -Method Get -Headers $Headers -ErrorAction Stop
+        $docs = @($response.response.docs)
+        foreach ($d in $docs) { $users[([string]$d.object_id_s).ToLower()] = ([string]$d.active_state_s).ToUpper() }
+        $total = [int]$response.response.numFound
+        $start += 500
+    } while ($docs.Count -gt 0 -and $start -lt $total)
+    return $users
+}
+
+
+# ----- CASES -----
+
+# Create a case and give back ArkCase's reply (the new case, with its ID and case number).
+# -ReceivedDate must already be in ArkCase format, e.g. "2026-10-28T00:00:00.000Z" (or empty).
+# -OriginatorId is optional: 0 (or left out) = the case is created with no originator.
+# -People is optional: a list of @{ PersonId = 115; PersonType = "Subject" } for the case's People section.
+function New-CaseFile {
+    param(
+        [Parameter(Mandatory)] [string]$Title,
+        [Parameter(Mandatory)] [string]$CaseType,
+        [string]$CaseSubtype,
+        [string]$Jurisdiction,
+        [string]$ReceivedDate,
+        [string]$Details,
+        [long]$OriginatorId = 0,
+        [object[]]$People = @()
+    )
+    $body = [ordered]@{
+        className    = "gov.nysits.general.dto.NewNYSCaseFileDTO"
+        title        = $Title
+        caseType     = $CaseType
+        caseSubtype  = $CaseSubtype
+        jurisdiction = $Jurisdiction
+        receivedDate = $(if ($ReceivedDate) { $ReceivedDate } else { $null })
+        details      = $Details
+        # The case's People section (the same field the Briefcase screen sends)
+        personAssociations = @(foreach ($p in $People) {
+            [ordered]@{
+                personId   = [long]$p.PersonId
+                personType = $p.PersonType
+                parentType = "CASE_FILE"
+            }
+        })
+    }
+    # Add the originator only when there is one
+    if ($OriginatorId -gt 0) {
+        $body.originator = [ordered]@{
+            personId   = $OriginatorId
+            personType = "Initiator"
+            parentType = "CASE_FILE"
+        }
+    }
+    $body = $body | ConvertTo-Json -Depth 5
+
+    $Url = "$BaseUrl/api/v1/plugin/casefile"
+    $response = Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -ErrorAction Stop `
+                    -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8"
+    return $response
+}
+
+# Connect a person or organization to a case.
+#   -PersonId / -PersonName : the person's or organization's ID and name
+#   -LinkType   : SUBJECT, ORIGINATING_SOURCE, or the partner agency link type
+#   -TargetType : PERSON or ORGANIZATION
+function Add-CaseLink {
+    param(
+        [Parameter(Mandatory)] [long]$CaseId,
+        [Parameter(Mandatory)] [string]$CaseTitle,
+        [Parameter(Mandatory)] [long]$PersonId,
+        [Parameter(Mandatory)] [string]$PersonName,
+        [Parameter(Mandatory)] [string]$LinkType,
+        [string]$TargetType = "PERSON"
+    )
+    $body = [ordered]@{
+        parentId           = $CaseId
+        parentType         = "CASE_FILE"
+        parentTitle        = $CaseTitle
+        associationType    = $LinkType
+        targetId           = $PersonId
+        targetType         = $TargetType
+        targetTitle        = $null
+        targetName         = $PersonName
+        inverseAssociation = [ordered]@{          # the same link, recorded on the person's / organization's side
+            parentId        = $PersonId
+            parentType      = $TargetType
+            parentTitle     = $null
+            parentName      = $PersonName
+            associationType = $LinkType
+            targetId        = $CaseId
+            targetType      = "CASE_FILE"
+            targetTitle     = $CaseTitle
+        }
+    } | ConvertTo-Json -Depth 5
+
+    $Url = "$BaseUrl/api/v1/service/objectassociations"
+    Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -ErrorAction Stop `
+        -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8" | Out-Null
+}
+
+# Assign a case to a user (by login, e.g. "andy.fordjour@its.ny.gov").
+# ArkCase saves the whole case again with the new assignee, so: get the case, change it, save it.
+function Set-CaseAssignee {
+    param(
+        [Parameter(Mandatory)] [long]$CaseId,
+        [Parameter(Mandatory)] [string]$Login
+    )
+    # 1) Get the latest copy of the case
+    $Url = "$BaseUrl/api/latest/plugin/casefile/byId/$CaseId"
+    try { $case = Invoke-RestMethod -Uri $Url -Method Get -Headers $Headers -ErrorAction Stop }
+    catch {
+        $why = if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }
+        throw "Assign step 1 of 2 - READING case $CaseId was refused: $why"
+    }
+
+    # 2) Change the assignee (or add one if the case doesn't have one yet)
+    $assignee = @($case.participants | Where-Object { $_.participantType -eq "assignee" }) | Select-Object -First 1
+    if ($assignee) {
+        $assignee.participantLdapId = $Login
+    }
+    else {
+        $case.participants = @($case.participants) + [pscustomobject]@{
+            className         = "com.armedia.acm.services.participants.model.AcmParticipant"
+            objectType        = "CASE_FILE"
+            objectId          = $CaseId
+            participantType   = "assignee"
+            participantLdapId = $Login
+        }
+    }
+
+    # 3) Save the case
+    $json = $case | ConvertTo-Json -Depth 100
+    $Url = "$BaseUrl/api/latest/plugin/casefile/update"
+    try {
+        Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -ErrorAction Stop `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) -ContentType "application/json; charset=utf-8" | Out-Null
+    }
+    catch {
+        $why = if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }
+        throw "Assign step 2 of 2 - SAVING case $CaseId (assignee $Login) was refused: $why"
+    }
+}
+
