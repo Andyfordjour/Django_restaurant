@@ -1,6 +1,5 @@
-foreach ($id in 275, <new case ID>) {
+foreach ($id in 275, 283) {
     $c = Invoke-RestMethod "$Global:StageUrl/api/latest/plugin/casefile/byId/$id" -Headers @{ Authorization = "Bearer $Global:Token" }
     "===== Case $id ====="
-    $c.personAssociations | Select-Object personId, personType, parentType | Format-Table
-    $c.PSObject.Properties.Name -match 'subj|initiat|origin|person' 
+    $c | Format-List personId, personType, initiatorFullName
 }
