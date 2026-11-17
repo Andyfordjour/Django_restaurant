@@ -1,1 +1,82 @@
+# Add users to a case's Participants section (e.g. type "investigator").
+# Like Set-CaseAssignee: get the case, add the participants, save the case. Gives back the logins actually added.
+function Add-CaseParticipants {
+    param(
+        [Parameter(Mandatory)] [long]$CaseId,                                       # the case to add them to
+        [Parameter(Mandatory)] [string[]]$Logins,                                   # e.g. "amir.khan@its.ny.gov"
+        [string]$ParticipantType = "investigator"                                   # their type on the case
+    )
+    $Url = "$BaseUrl/api/latest/plugin/casefile/byId/$CaseId"                       # 1) the address to read the case
+    try { $case = Invoke-RestMethod -Uri $Url -Method Get -Headers $Headers -ErrorAction Stop }   # get the latest copy of the case
+    catch {                                                                         # reading was refused...
+        $why = if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }   # ...ArkCase's reason (or PowerShell's)
+        throw "Participants step 1 of 2 - READING case $CaseId was refused: $why"  # stop with a clear message
+    }
+
+    $added = @()                                                                    # 2) the logins actually added
+    foreach ($login in $Logins) {                                                   # each login in turn
+        $already = @($case.participants | Where-Object { $_.participantLdapId -eq $login -and $_.participantType -eq $ParticipantType })   # already on the case with this type?
+        if ($already.Count -gt 0) { continue }                                      # yes - leave them alone
+        $case.participants = @($case.participants) + [pscustomobject]@{             # no - add a new participant entry:
+            className         = "com.armedia.acm.services.participants.model.AcmParticipant"   # what kind of record it is
+            objectType        = "CASE_FILE"                                         # it belongs to a case
+            objectId          = $CaseId                                             # this case
+            participantType   = $ParticipantType                                    # e.g. investigator
+            participantLdapId = $login                                              # the user's login
+        }
+        $added += $login                                                            # remember we added them
+    }
+    if ($added.Count -eq 0) { return @() }                                          # nothing new - no need to save
+
+    $json = $case | ConvertTo-Json -Depth 100                                       # 3) the whole case, as JSON
+    $Url = "$BaseUrl/api/latest/plugin/casefile/update"                             # the address to save it
+    try {
+        Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -ErrorAction Stop `
+            -Body ([System.Text.Encoding]::UTF8.GetBytes($json)) -ContentType "application/json; charset=utf-8" | Out-Null   # save the case (UTF-8, so accents survive)
+    }
+    catch {                                                                         # saving was refused...
+        $why = if ($_.ErrorDetails.Message) { $_.ErrorDetails.Message } else { $_.Exception.Message }   # ...ArkCase's reason (or PowerShell's)
+        throw "Participants step 2 of 2 - SAVING case $CaseId (participants $($added -join ', ')) was refused: $why"   # stop with a clear message
+    }
+    return $added                                                                   # give back who was added
+}
+
+
+======
+    # The column with the additional investigators (several names separated by $ParticipantSeparator)
+    [string]$ParticipantColumn = "Participating Investigator",
+    # What separates several names in that column
+    [string]$ParticipantSeparator = ",",
+    # The participant type they get on the case (a value from the Participants "Type" drop-down)
+    [string]$ParticipantType = "investigator",
+=====
+
+# Go through the 9 API functions this script needs, one name at a time...
+foreach ($f in "Get-AllPersons", "New-Person", "Get-AllOrganizations", "New-Organization",
+               "Get-AllUserLogins", "New-CaseFile", "Add-CaseLink", "Set-CaseAssignee", "Add-CaseParticipants") {
+=====
+
+$LogColumns = "Key","CaseId","CaseNumber","SubjectType","SubjectId","SourceType","SourceId","PartnerAgencyId","Assignee","Participants","LinksDone","SheetStatus","Status","Error","Time"
+======
+
+        Participants = ""
+======
+        # STEP 5b - Add the Participating Investigators as case participants (type $ParticipantType)
+        $investigators = @()                                                                   # the logins that will be added
+        foreach ($name in ((Get-RowValue -Row $row -ColumnName $ParticipantColumn) -split [regex]::Escape($ParticipantSeparator))) {   # each name in the cell, split on the comma
+            if (-not $name.Trim()) { continue }                                                # empty piece (e.g. a trailing comma) - skip
+            $pLogin = ConvertTo-Login $name                                                    # "Amir Khan" -> "amir.khan@its.ny.gov"
+            if ($pLogin -and $pLogin -eq $login) { continue }                                  # already the assignee - skip
+            if (-not $pLogin -or -not $users.ContainsKey($pLogin) -or -not (Test-UserActive $users[$pLogin])) {   # no login, no such user, or inactive...
+                Write-Host "  '$($name.Trim())' is not an active ArkCase user - participant skipped" -ForegroundColor Yellow; continue   # ...say so (yellow) and skip
+            }
+            $investigators += $pLogin                                                          # good - add to the list
+        }
+        $investigators = @($investigators | Select-Object -Unique)                             # the same person named twice counts once
+        $result.Participants = $investigators -join ';'                                        # write them into the log line
+        if ($investigators -and $WhatIf) { Write-Host "  [would add participants: $($investigators -join ', ')]" -ForegroundColor DarkGray }   # dry run - only say who (grey)
+        elseif ($investigators) {                                                              # real run, and there is someone to add
+            $added = @(Add-CaseParticipants -CaseId $caseId -Logins $investigators -ParticipantType $ParticipantType)   # add them (skips anyone already on the case)
+            Write-Host "  participants added: $(if ($added) { $added -join ', ' } else { 'none new' })" -ForegroundColor Green   # say who was added (green)
+        }
 
