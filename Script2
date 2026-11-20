@@ -1,17 +1,36 @@
-# Every case in ArkCase, 500 at a time. Each has "object_id_s" = ID and its title in "title_parseable".
-function Get-AllCases {
-    $all = New-Object System.Collections.Generic.List[object]                      # the cases found so far
-    $start = 0                                                                     # which case to start the next page at
-    do {
-        $Url = "$BaseUrl/api/latest/plugin/search/CASE_FILE?start=$start&n=500"   # one page of up to 500 cases
-        $response = Invoke-RestMethod -Uri $Url -Method Get -Headers $Headers -ErrorAction Stop
-        $docs = @($response.response.docs)                                         # the cases on this page
-        foreach ($d in $docs) { $all.Add($d) }                                     # add them to the list
-        $total = [int]$response.response.numFound                                  # how many cases there are in total
-        $start += 500                                                              # move on to the next page
-    } while ($docs.Count -gt 0 -and $start -lt $total)                             # until every page is read
-    return ,$all                                                                   # the whole list
+# Close a case - the same call the "Change Case Status" screen makes.
+#   -UseApprovalFlow $false (default) closes it directly; $true sends it to "IN APPROVAL" for -ApproverLogin.
+function Close-Case {
+    param(
+        [Parameter(Mandatory)] [long]$CaseId,                                       # the case to close
+        [string]$Resolution,                                                        # e.g. Unsubstantiated (must match the drop-down); blank = none
+        [Parameter(Mandatory)] [string]$ChangeDate,                                 # when it was closed, e.g. "2026-11-20T14:21:05.000"
+        [bool]$UseApprovalFlow = $false,                                            # $true = go through approval (as the screen does)
+        [string]$ApproverLogin = "",                                                # only with the approval flow: who approves
+        [string]$OwningGroup = ""                                                   # only with the approval flow: the owning group
+    )
+    $participants = @()                                                             # who handles the approval (only with the approval flow)
+    if ($UseApprovalFlow) {
+        $participants = @(
+            [ordered]@{ className = "com.armedia.acm.services.participants.model.AcmParticipant"; participantLdapId = $ApproverLogin; participantType = "approver" },
+            [ordered]@{ className = "com.armedia.acm.services.participants.model.AcmParticipant"; participantLdapId = $OwningGroup;   participantType = "owning group" }
+        )
+    }
+    $body = [ordered]@{
+        caseId               = $CaseId                                              # which case
+        status               = "CLOSED"                                             # the new status
+        caseResolution       = $(if ($Resolution) { $Resolution } else { $null })   # the resolution; blank = none
+        objectType           = "CHANGE_CASE_STATUS"                                 # what kind of request this is
+        changeCaseStatusFlow = $UseApprovalFlow                                     # true = go through approval
+        changeDate           = $ChangeDate                                          # when it was closed
+        description          = ""                                                   # optional note (the screen sends it empty)
+        participants         = $participants                                        # approver + owning group (empty without approval)
+    } | ConvertTo-Json -Depth 5
+    $Url = "$BaseUrl/api/latest/plugin/casefile/change/status/change_case_status"   # the address of the "change status" call
+    Invoke-RestMethod -Uri $Url -Method Post -Headers $Headers -ErrorAction Stop `
+        -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8" | Out-Null   # send it (UTF-8)
 }
+
 
 
 # =====================================================================
@@ -36,7 +55,9 @@ function Get-AllCases {
 #   .\CloseCasesFromCsv.ps1 -Environment Stage -WhatIf        no questions, dry run
 #
 # RESULTS
-#   CaseCloseLog_<environment>.csv - one line per row. Rerunning skips rows already sent.
+#   CaseCloseLog_<environment>.csv - one line per row, as a record only.
+#   Reruns are decided by ArkCase, not the log: a case that is already CLOSED (or IN APPROVAL)
+#   in ArkCase is skipped; anything else marked Closed in the sheet is closed.
 # =====================================================================
 param(
     [string]$ModulePath  = "V:\CLS\Bureaus\EESStaff\_scripts\_Briefcase\TestingEnvironment\Functions.psm1",   # for the environment picker (URL + token)
@@ -55,7 +76,7 @@ param(
 Import-Module $ModulePath -Force                                                   # load Functions.psm1 (environment picker, token)
 try   { $EnvName = Select-BriefcaseEnvironment -Name $Environment }                # Stage / Prod menu - sets $Global:StageUrl and $Global:Token
 catch { Write-Host $_.Exception.Message -ForegroundColor Red; return }             # wrong choice or empty token -> stop
-foreach ($f in "Get-AllCases", "GetCaseByID") {                                   # this script uses these two from Functions.psm1
+foreach ($f in "Get-AllCases", "GetCaseByID", "Close-Case") {                     # this script uses these three from Functions.psm1
     if (-not (Get-Command $f -ErrorAction SilentlyContinue)) {
         Write-Host "Function '$f' not found in $ModulePath." -ForegroundColor Red; return
     }
@@ -97,27 +118,7 @@ function Get-ChangeDate {                                                       
 # ----- ARKCASE CALLS -----
 # Get-AllCases (every case in ArkCase) is in Functions.psm1 - this script uses that one.
 # GetCaseByID (read one case) is also in Functions.psm1 - this script uses it to read a case's status.
-function Close-Case { param([long]$CaseId, [string]$Resolution, [string]$ChangeDate)   # the same call the Change Case Status screen makes
-    $participants = @()                                                            # who handles the approval (only with the approval flow)
-    if ($UseApprovalFlow) {
-        $participants = @(
-            [ordered]@{ className = "com.armedia.acm.services.participants.model.AcmParticipant"; participantLdapId = $ApproverLogin; participantType = "approver" },
-            [ordered]@{ className = "com.armedia.acm.services.participants.model.AcmParticipant"; participantLdapId = $OwningGroup;   participantType = "owning group" }
-        )
-    }
-    $body = [ordered]@{
-        caseId               = $CaseId                       # which case
-        status               = "CLOSED"                      # the new status
-        caseResolution       = $(if ($Resolution) { $Resolution } else { $null })   # e.g. Unsubstantiated (must match the drop-down); blank = none
-        objectType           = "CHANGE_CASE_STATUS"          # what kind of request this is
-        changeCaseStatusFlow = $UseApprovalFlow              # true = go through approval (as the screen does)
-        changeDate           = $ChangeDate                   # when it was closed
-        description          = ""                            # optional note (the screen sends it empty)
-        participants         = $participants                 # approver + owning group
-    } | ConvertTo-Json -Depth 5
-    Invoke-RestMethod -Uri "$BaseUrl/api/latest/plugin/casefile/change/status/change_case_status" -Method Post -Headers $Headers -ErrorAction Stop `
-        -Body ([System.Text.Encoding]::UTF8.GetBytes($body)) -ContentType "application/json; charset=utf-8" | Out-Null   # send it (UTF-8)
-}
+# Close-Case (the "change status" call) is also in Functions.psm1 - this script uses that one.
 
 # ----- MAIN PART -----
 if (-not (Test-Path -LiteralPath $CsvPath))     { Write-Host "Not found: $CsvPath" -ForegroundColor Red; return }
@@ -134,7 +135,7 @@ foreach ($c in $allCases) {
 }
 Write-Host "Loaded $($allCases.Count) case(s) from ArkCase ($($caseIds.Count) different titles)." -ForegroundColor Cyan
 if ($allCases.Count -gt 0 -and $caseIds.Count -eq 0) { Write-Host "No case titles found in the search results - tell Claude which field holds the title." -ForegroundColor Red; return }
-$closeLog = @{}                                                                    # this script's earlier results (for reruns)
+$closeLog = @{}                                                                    # this script's earlier results (kept as a record - not used to skip)
 if (Test-Path -LiteralPath $CloseLogPath) { foreach ($e in Import-Csv -LiteralPath $CloseLogPath -Encoding UTF8) { $closeLog[$e.Key] = $e } }
 
 $toClose = @($rows | Where-Object { (Get-RowValue -Row $_ -ColumnName "Status").Trim() -eq "Closed" })   # only rows marked Closed
@@ -155,7 +156,6 @@ $done = 0; $failed = 0; $skipped = 0; $dupes = 0                                
 foreach ($row in $toClose) {
     $key = $row.$KeyColumn.Trim()                                                  # this row's Case Title
     Write-Host ""; Write-Host "[$key]"
-    if ($closeLog[$key] -and $closeLog[$key].Status -eq "Sent") { Write-Host "  already sent earlier - skipping" -ForegroundColor DarkGray; $skipped++; continue }
     $result = [ordered]@{ Key = $key; CaseId = ""; Resolution = ""; ChangeDate = ""; StatusBefore = ""; StatusAfter = ""; Status = ""; Error = ""; Time = (Get-Date).ToString("s") }
     try {
         $ids = @($caseIds[(Get-TitleKey $key)])                                   # every ArkCase case with this title
@@ -174,7 +174,8 @@ foreach ($row in $toClose) {
 
         if ($WhatIf) { Write-Host "  [would close case $caseId ($before -> CLOSED), $resText, date $($result.ChangeDate)]" -ForegroundColor DarkGray; $done++; continue }
 
-        Close-Case -CaseId $caseId -Resolution $resolution -ChangeDate $result.ChangeDate   # send the change
+        Close-Case -CaseId $caseId -Resolution $resolution -ChangeDate $result.ChangeDate `
+                   -UseApprovalFlow $UseApprovalFlow -ApproverLogin $ApproverLogin -OwningGroup $OwningGroup   # send the change (Close-Case is in Functions.psm1)
         $result.StatusAfter = (GetCaseByID -CaseID $caseId -ErrorAction Stop).status   # read it back (IN APPROVAL or CLOSED)
         Write-Host "  case $caseId : $before -> $($result.StatusAfter) ($resText)" -ForegroundColor Green
         $result.Status = "Sent"; $done++
@@ -192,3 +193,8 @@ foreach ($row in $toClose) {
 Write-Host ""
 Write-Host "Finished. $(if ($WhatIf) { 'Would close' } else { 'Sent' }): $done   Failed: $failed   Skipped: $skipped   Duplicates: $dupes" -ForegroundColor Cyan
 if (-not $WhatIf) { Write-Host "Results saved to $CloseLogPath" -ForegroundColor Cyan }
+
+
+
+
+
